@@ -1,0 +1,1801 @@
+<title>PLUMBING · Rough to Trim</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+	--bg:#07080c; --panel:#0c0e14; --panel2:#15171f; --line:#252836;
+	--ink:#e8e4dc; --dim:#9a9789; --faint:#6d6b62;
+	--gold:#d4a24c; --sky:#6f92b8; --sage:#7fa07a; --rust:#c46a4a;
+	--paper:#f7f4ed; --paper2:#ece8df; --pink:#161410; --hair:#5c6370;
+	--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+	--serif:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;
+	--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,system-ui,sans-serif;
+	--tw:60px; --th:52px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px}
+button{font:inherit}
+button:focus-visible,.tile:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* ---------- the stage = the whole screen ---------- */
+#stage{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 50%,#1a2a3e 0%,#0b1119 46%,#07080c 80%);overflow:hidden;touch-action:none}
+#stage.over #housebox{box-shadow:0 0 0 3px var(--gold),0 0 60px rgba(212,162,76,.25)}
+#dial{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#dial .arc{fill:none;stroke:#2a2f3d;stroke-width:1.5}
+#dial .arc.pass{stroke:var(--sage);stroke-width:2.5}
+#dial .arc.fail{stroke:var(--rust);stroke-width:2.5}
+#dial .arc.open{stroke:var(--gold);stroke-width:2;stroke-dasharray:4 5}
+#dial .rl{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;fill:#6d6b62}
+#dial .rl.pass{fill:var(--sage)}#dial .rl.fail{fill:var(--rust)}#dial .rl.open{fill:var(--gold)}
+
+#housebox{position:absolute;border-radius:14px;transition:box-shadow .15s}
+#housebox canvas{width:100%;height:100%;display:block;border-radius:14px}
+#housebox{overflow:hidden;background:#0b1119}
+#stage.over #housebox canvas{cursor:copy}
+#msg{position:absolute;left:50%;transform:translateX(-50%);text-align:center;max-width:46ch;font-size:12px;line-height:1.4;color:var(--dim);pointer-events:none;text-wrap:balance}
+#msg b{color:var(--ink)}
+#msg.leak b{color:var(--sky)}#msg.pass b{color:var(--sage)}#msg.fail b{color:var(--rust)}
+
+/* corners */
+.corner{position:absolute;z-index:3;display:flex;flex-direction:column;gap:6px}
+#tl{left:14px;top:12px}
+#tr{right:14px;top:12px;align-items:flex-end}
+#bl{left:14px;bottom:12px}
+#br{right:14px;bottom:12px;align-items:flex-end}
+.brand{font-family:var(--serif);font-size:18px;line-height:1}
+.brand em{color:var(--gold);font-style:italic}
+.brand small{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin-top:4px}
+.toggle{display:inline-flex;background:rgba(21,23,31,.9);border:1px solid var(--line);border-radius:999px;padding:2px;width:max-content}
+.toggle button{background:none;border:0;color:var(--dim);font-size:11px;padding:4px 9px;border-radius:999px;cursor:pointer}
+.toggle button.on{background:var(--gold);color:#17140c;font-weight:600}
+button.ghost{background:rgba(21,23,31,.9);border:1px solid var(--line);color:var(--ink);padding:4px 10px;border-radius:999px;cursor:pointer;font-size:11px}
+button.ghost[disabled]{opacity:.32;cursor:not-allowed}
+#undo:not([disabled]){border-color:var(--gold);color:var(--gold)}
+.stamp{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;padding:2px 7px;border-radius:3px;border:1px solid var(--line);color:var(--faint);background:rgba(12,14,20,.8);width:max-content}
+.stamp.pass{border-color:var(--sage);color:var(--sage)}
+.stamp.fail{border-color:var(--rust);color:var(--rust)}
+#stamps{display:flex;flex-wrap:wrap;gap:3px;justify-content:flex-end;max-width:180px}
+.stamp.pass,.stamp.fail{padding:2px 3px}
+.score{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.score b{color:var(--ink);font-weight:600}
+.foot{font-size:9px;color:var(--faint);max-width:33ch;line-height:1.32}
+#br{pointer-events:none}
+.foot a{pointer-events:auto}
+.foot a{color:var(--gold)}
+
+/* ---------- the ring of tiles ---------- */
+/* ---------- the card face ---------- */
+.tile{position:absolute;z-index:4;width:var(--tw);height:var(--th);margin:0;display:flex;flex-direction:column;justify-content:space-between;border-radius:7px;padding:3px 5px 4px;border:1px solid var(--hair);color:var(--pink);text-align:left;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;transition:transform .15s,box-shadow .15s,opacity .2s;transform:translate(-50%,-50%);overflow:hidden}
+.tile .z{position:absolute;left:5px;top:2px;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;opacity:.92}
+.tile .st{position:absolute;right:4px;top:3px;font-family:var(--mono);font-size:9px;font-weight:700;line-height:1;opacity:.62}
+.tile .pic{display:block;height:26px;width:34px;margin:14px auto 0}
+.tile .nm{font-size:7.5px;line-height:1.1;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.tile .lk{position:absolute;right:4px;bottom:3px;font-size:8px;opacity:.7}
+.tile .fm{display:none}
+/* the big one in the deck */
+.tile.big{position:absolute;inset:0;width:auto;height:auto;transform:none;border-radius:11px;padding:11px 13px 13px;cursor:grab;box-shadow:0 14px 34px rgba(0,0,0,.55)}
+.tile.big:hover{transform:translateY(-2px)}
+.tile.big.ready{box-shadow:0 0 0 3px var(--gold),0 14px 34px rgba(0,0,0,.55)}
+.tile.big .z{left:12px;top:7px;font-size:40px;font-weight:700;opacity:.95}
+.tile.big .st{right:11px;top:11px;text-align:right;font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;opacity:.72;font-weight:500}
+.tile.big .st b{display:block;font-family:var(--sans);font-size:11px;letter-spacing:.02em;text-transform:none;margin-top:2px;opacity:.95}
+.tile.big .pic{height:78px;width:104px;margin:56px auto 0}
+.tile.big .nm{font-family:var(--serif);font-size:14.5px;line-height:1.25;white-space:normal;text-align:left;margin-top:10px;opacity:1}
+.tile.big .fm{display:block;font-size:8.5px;line-height:1.3;opacity:.62;margin-top:4px}
+.tile.big .lk{right:11px;bottom:9px;font-size:12px}
+.tile.big.spent::after,.tile.big.burned::after{right:11px;bottom:8px;font-size:18px}
+.tile.spent{background:var(--paper2)!important;color:#8a8578;border-color:#c9c3b5;cursor:default}
+.tile.spent::after{content:"✓";position:absolute;right:4px;bottom:3px;font-size:11px;color:#7fa07a}
+.tile.covered{opacity:.4;cursor:not-allowed}
+.tile.burned::after{content:"✗";position:absolute;right:4px;bottom:3px;font-size:11px;color:#c46a4a;font-weight:700}
+.tile.burned{border-color:#c46a4a}
+.tile.shake{animation:shake .4s}
+@keyframes shake{0%,100%{transform:translate(-50%,-50%)}20%{transform:translate(calc(-50% - 5px),-50%)}40%{transform:translate(calc(-50% + 5px),-50%)}60%{transform:translate(calc(-50% - 4px),-50%)}80%{transform:translate(calc(-50% + 4px),-50%)}}
+#ghost{position:fixed;z-index:50;pointer-events:none;width:var(--tw);height:var(--th);display:none;opacity:.95}
+#ghost .tile{position:static;transform:rotate(-4deg);box-shadow:0 18px 40px rgba(0,0,0,.6)}
+
+/* ---------- the peek (the card, anchored to the tile) ---------- */
+#peek{position:fixed;z-index:40;width:19rem;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;display:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px 12px;box-shadow:0 18px 50px rgba(0,0,0,.6)}
+#peek.on{display:block}
+#peek .bar{height:3px;width:30px;border-radius:99px;background:var(--gold);margin-bottom:8px}
+#peek .kick{font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);margin:0 0 2px}
+#peek .sym{font-family:var(--serif);font-size:30px;line-height:1;margin:0;color:var(--gold)}
+#peek h2{font-family:var(--serif);font-size:17px;font-weight:400;margin:3px 0 1px;line-height:1.2}
+#peek .meta{font-size:10px;color:var(--faint);margin:0 0 8px}
+#peek .law{font-size:13.5px;line-height:1.4;margin:0 0 9px;color:var(--ink)}
+.blk{border-left:3px solid var(--sage);background:#10151c;padding:7px 9px;margin-bottom:7px}
+.blk h3{margin:0 0 3px;font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;color:var(--sage)}
+.blk p{margin:0;font-size:11.5px;color:var(--dim);line-height:1.45}
+.blk a{color:var(--gold)}
+.blk.fail{border-left-color:var(--rust)}.blk.fail h3{color:var(--rust)}
+.blk.spec{border-left-color:var(--sky)}.blk.spec h3{color:var(--sky)}
+.blk.hot{border-left-color:var(--gold);background:#14110c}.blk.hot h3{color:var(--gold)}.blk.hot p{color:var(--ink)}
+.grade{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--dim);margin:1px 0 6px}
+.grade b{font-family:var(--sans);font-size:11px}
+.grade.g1{border-color:var(--sage);color:var(--sage)}.grade.g2{border-color:var(--sky);color:var(--sky)}.grade.g3,.grade.g5{border-color:var(--rust);color:var(--rust)}
+#peek .src{font-size:10px;color:var(--faint);margin:0 0 10px;line-height:1.4}
+.eat{background:var(--gold);border:0;color:#17140c;font-weight:700;padding:7px 13px;border-radius:999px;cursor:pointer;font-size:12px}
+#peek .close{position:absolute;right:8px;top:6px;background:none;border:0;color:var(--faint);font-size:16px;cursor:pointer;padding:2px 6px}
+
+/* ---------- the chart overlay (the table, read-only) ---------- */
+#chart{position:fixed;inset:0;z-index:30;display:none;background:rgba(7,8,12,.8);align-items:center;justify-content:center;padding:20px}
+#chart.on{display:flex}
+.paper{position:relative;background:var(--paper);border-radius:10px;padding:14px 14px 12px;color:var(--pink);max-width:min(66rem,100%);max-height:100%;overflow:auto;box-shadow:0 30px 80px rgba(0,0,0,.7)}
+.paper h2{margin:0 0 10px;text-align:center;font-size:10px;font-weight:500;letter-spacing:.28em;text-transform:uppercase;color:#6d6b62}
+.paper .close{position:absolute;right:8px;top:6px;background:none;border:0;color:#6d6b62;font-size:18px;cursor:pointer}
+.grid{display:grid;gap:2px}
+.fam{padding:0 2px 6px;text-align:center}
+.fam b{display:block;font-size:11px;font-weight:600}
+.fam span{display:block;font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:#6d6b62}
+.rowlab{display:flex;align-items:center;justify-content:flex-end;padding-right:5px}
+.rowlab span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#6d6b62;white-space:nowrap}
+.grid .tile{position:static;transform:none;width:auto;height:auto;min-height:3.4rem;cursor:default}
+.grid .tile:hover{transform:none;box-shadow:none}
+.grid .tile .nm{white-space:normal;font-size:8px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 4px 0;font-size:9.5px;color:#6d6b62}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:4px;border:1px solid var(--hair)}
+
+/* ---------- Covenant Builders ---------- */
+:root{--brand:#c4a574; --wordmark:#e9e7e2; --navy:#12182B}
+.lockup{display:flex;flex-direction:column;gap:3px;line-height:1}
+.lockup .row1{display:flex;align-items:center;gap:7px}
+.lockup .rule{height:1.5px;background:var(--brand);flex:1;min-width:26px;opacity:.85}
+.lockup svg{display:block;width:15px;height:13px;flex:none}
+.lockup .wm{font-family:var(--serif);font-size:12.5px;letter-spacing:.20em;color:var(--wordmark);text-transform:uppercase;white-space:nowrap}
+.lockup .wd{font-family:var(--sans);font-size:7.5px;letter-spacing:.34em;color:var(--brand);text-transform:uppercase;text-align:center}
+.appname{font-family:var(--serif);font-size:16px;line-height:1;margin-top:7px;color:var(--ink)}
+.appname em{color:var(--gold);font-style:italic}
+.appname small{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.17em;text-transform:uppercase;color:var(--faint);margin-top:4px}
+.foot b{color:var(--brand);font-weight:600}
+
+/* ---------- the deck ---------- */
+#deck{position:absolute;z-index:5;width:246px;display:flex;flex-direction:column;align-items:center;gap:9px;
+	background:rgba(10,12,18,.72);border:1px solid var(--line);border-radius:16px;padding:14px 13px 13px}
+#deck.ready{border-color:rgba(212,162,76,.55)}
+#dside{display:flex;flex-direction:column;align-items:center;gap:8px}
+#dwrap{position:relative;width:186px;height:250px}
+#dwrap .edge{position:absolute;inset:0;border-radius:11px;background:var(--paper2);border:1px solid var(--hair);opacity:.5}
+#dwrap .edge:nth-child(1){transform:translate(9px,9px) rotate(2.6deg)}
+#dwrap .edge:nth-child(2){transform:translate(5px,5px) rotate(1.3deg)}
+#dcard{position:absolute;inset:0}
+#dcard .ddone{display:flex;align-items:center;justify-content:center;height:100%;border:1px dashed var(--line);border-radius:11px;color:var(--dim);font-size:12px;text-align:center;padding:16px}
+.dnav{display:flex;align-items:center;gap:9px}
+.dnav button{width:30px;height:26px;padding:0;font-size:12px}
+#dcount{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+#dcount b{color:var(--ink);font-size:12.5px}
+#dleft{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+#dpips{display:flex;gap:4px}
+#dpips i{width:13px;height:5px;border-radius:99px;background:#2a2f3d}
+#dpips i.pass{background:var(--sage)}#dpips i.fail{background:var(--rust)}#dpips i.open{background:var(--gold)}
+#dall{font-size:10.5px}
+@media (max-width:760px){
+	#deck{flex-direction:row;align-items:center;gap:12px;width:auto;padding:10px 12px}
+	#dwrap{width:132px;height:176px}
+	#dside{align-items:flex-start;gap:7px}
+	#dcount{white-space:normal;line-height:1.5}
+	#dleft{display:none}
+	.tile.big{padding:8px 9px 9px}
+	.tile.big .z{font-size:27px;left:9px;top:5px}
+	.tile.big .st{font-size:7px;right:8px;top:7px}
+	.tile.big .st{max-width:58px}
+	.tile.big .st b{display:none}
+	.tile.big .pic{height:48px;width:66px;margin:34px auto 0}
+	.tile.big .nm{font-size:11px;margin-top:7px}
+	.tile.big .fm{display:none}
+	#bl{top:124px;bottom:auto}
+	#msg{max-width:34ch;font-size:11.5px}
+}
+#stage.deckmode .tile:not(.big){display:none}
+#stage.deckmode #dial{display:none}
+
+/* ---------- done ---------- */
+#done{display:none;position:fixed;inset:0;z-index:45;background:rgba(7,8,12,.88);align-items:center;justify-content:center;text-align:center;padding:24px}
+#done.on{display:flex}
+#done h2{font-family:var(--serif);font-weight:400;font-size:36px;margin:0 0 6px;color:#fff;text-wrap:balance}
+#done .stars{font-size:26px;color:var(--gold);letter-spacing:.2em;margin-bottom:8px}
+#done p{color:var(--dim);max-width:44ch;margin:0 auto 14px;line-height:1.5}
+#done p b{color:var(--ink)}
+.drip{animation:drip 1.1s ease-in forwards}
+@keyframes drip{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(60px)}}
+.bandlab{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;fill:#9a9789}
+@media (max-width:760px){:root{--tw:44px;--th:40px}.tile .z{font-size:10px}#dial .rl{display:none}.tile.big .nm{display:block}.tile .sym{font-size:15px}.tile .nm{display:none}.brand small,.foot{display:none}.toggle button{font-size:10px;padding:3px 7px}#stamps{display:none}}
+@media (prefers-reduced-motion:reduce){.tile,.drip,.tile.shake{animation:none;transition:none}}
+</style>
+
+<div id="stage" aria-label="The 3D house, with every pipe around it">
+	<svg id="dial" aria-hidden="true"></svg>
+	<div id="housebox"></div>
+	<p id="msg"><b>40 cards, 7 steps.</b> Drag the top card onto the house. Drag the house to spin it, scroll to zoom.</p>
+
+	<div class="corner" id="tl">
+		<div class="lockup" aria-label="Covenant Builders">
+			<div class="row1"><span class="rule"></span><svg viewBox="0 0 147 121" aria-hidden="true"><path d="M11,116 L2,55 L45,66 L73,3 L101,66 L145,55 L136,116 Z" fill="none" stroke="var(--brand)" stroke-width="13" stroke-linejoin="miter"/></svg><span class="rule"></span></div>
+			<div class="wm">Covenant Builders</div><div class="wd">We Deliver</div>
+		</div>
+		<div class="appname">PLUMBING <em>Rough to Trim</em><small>Treasure Coast CBS home · the three visits</small></div>
+		<div class="toggle" role="tablist" aria-label="View">
+			<button data-view="xray" class="on">X-ray</button>
+			<button data-view="street">Street</button>
+			<button data-view="inspector">Inspector</button>
+		</div>
+	</div>
+	<div class="corner" id="tr"><div id="stamps"></div></div>
+	<div class="corner" id="bl">
+		<span class="score" id="score">Gates 0/7 · Leaks 0 · Failed gates 0</span>
+		<div style="display:flex;gap:6px;flex-wrap:wrap;max-width:60vw"><button class="ghost" id="undo" disabled title="Take the last step back (Ctrl+Z)">&#8630; Reverse</button><button class="ghost" id="dall"></button><button class="ghost" id="reset">Start over</button><button class="ghost" id="showchart">The table</button></div>
+	</div>
+	<div class="corner" id="br"><span class="foot"><b>Covenant Builders</b> · CBC1253676 · (772) 473-7115<br>Vero Beach · Sebastian · Fort Pierce · Port St. Lucie · Fellsmere · Hablamos español<br>Gates in the order of the Indian River County / Vero Beach <a href="https://indianriver.gov/Document%20Center/Services/Planning-and-Development/Building%20Division/2019_BRCOM_Scheduling.pdf" target="_blank" rel="noopener">residential inspection schedule</a> and FBC 8th Ed. (2023) — the 9th Ed. takes effect 31 Dec 2026. A training model, not a permit.</span></div>
+</div>
+
+<div id="deck" aria-label="The deck of build cards">
+	<div id="dwrap"><div class="edge"></div><div class="edge"></div><div id="dcard"></div></div>
+	<div id="dside">
+		<div class="dnav"><button class="ghost" id="dprev" aria-label="Previous card">&#9664;</button><span id="dcount"></span><button class="ghost" id="dnext" aria-label="Next card">&#9654;</button></div>
+		<div id="dpips" aria-label="The seven steps"></div>
+		<div id="dleft"></div>
+	</div>
+</div>
+
+<div id="peek" role="dialog" aria-label="Part card"><button class="close" id="peekclose" aria-label="Close">×</button><div id="peekbody"></div></div>
+<div id="chart" role="dialog" aria-label="Periodic Table of Plumbing Parts"><div class="paper"><button class="close" id="chartclose" aria-label="Close">×</button><h2>Periodic Table of Plumbing Parts — the data behind the ring</h2><div class="grid" id="table"></div><div class="legend" id="legend"></div></div></div>
+<div id="done"><div><div class="stars" id="d-stars"></div><h2 id="d-title"></h2><p id="d-body"></p><button class="eat" id="again">Plumb another one</button></div></div>
+<div id="ghost"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script>
+/* ============================================================
+   DATA — the table. Hue lives on the family. Order lives on
+   `needs`. If you write  if(part.id==='block')  the engine is dead.
+   ============================================================ */
+const FAMS = [
+	{id:'pp', sym:'Pp', label:'Paper', q:'Is it legal, and who signed?', hue:'#efe6cf', hueTo:'#d7c79b', block:1},
+	{id:'jb', sym:'Jb', label:'Job', q:'What has to happen before you come back?', hue:'#d6d3cb', hueTo:'#918d85', block:1},
+	{id:'dr', sym:'Dr', label:'Drain', q:'Where does the dirty water go?', hue:'#eae7df', hueTo:'#a8a294', block:2},
+	{id:'vt', sym:'Vt', label:'Vent', q:'How does air get in behind the water?', hue:'#cfe3d5', hueTo:'#7fa891', block:2},
+	{id:'su', sym:'Su', label:'Supply', q:'Where does the clean water come from?', hue:'#cfe0ef', hueTo:'#7096bd', block:3},
+	{id:'gs', sym:'Gs', label:'Gas', q:'What carries the fuel, and who tested it?', hue:'#f4dd97', hueTo:'#cfa32f', block:3},
+	{id:'fx', sym:'Fx', label:'Fixture', q:'What does the owner touch?', hue:'#f4f1ea', hueTo:'#c6bfae', block:4},
+];
+const ROWS = [
+	{n:1, code:'303 · 750', label:'Sewer tie-in', sees:'A tap into the main, a cleanout standing at the property line, and nothing covered over.'},
+	{n:2, code:'301', label:'Underground', sees:'Every pipe under the slab, open in the trench, capped, and holding the test.'},
+	{n:3, code:'503', label:'Slab', sees:'Your stub-ups capped, plumb, braced and protected — his inspection, your neck.'},
+	{n:4, code:'304 · 751', label:'Water service', sees:'A meter box at the line, an open trench, and the service line holding pressure.'},
+	{n:5, code:'311', label:'Top out', sees:'Drain, vent and water in open walls, plated at every stud, holding a test.'},
+	{n:6, code:'400', label:'Gas rough', sees:'Gas pipe in the open, capped at both ends, with a gauge on it that has not moved.'},
+	{n:7, code:'999', label:'Final', sees:'Every fixture set, every trap wet, every stop at 120, hot water at the far faucet.'},
+];
+const GRADES = {
+	'1':['✓','Robust','In the county schedule or the code table.'],
+	'2':['~','Range','Real, but the number is on your plans or the utility’s details, not in a book. Confirm.'],
+	'3':['⚠','Contested','Plumbers argue about it. Both shown.'],
+	'4':['◈','Model','Simplified for the sim.'],
+	'5':['✗','Cartoon','The common lie. It looked right until the gate.'],
+};
+const SRC_S = 'Indian River County / Vero Beach residential inspection schedule (BRCOM)';
+const SRC_P = 'FBC — Plumbing, 8th Ed. (2023)';
+const SRC_G = 'FBC — Fuel Gas, 8th Ed. (2023)';
+const HOUSE_URL = '../../../HOUSE/apps/cbs3d/index.html';
+const PARTS = [
+	{id:'pm', z:1, sym:'Pm', icon:'permit', name:'Pull the plumbing permit — and know whose licence it is', short:'Plumbing permit', fam:'pp', row:1, needs:[],
+		law:'Your building licence builds the house. It does not plumb it.',
+		spec:'You do not pull this one on CBC1253676. Florida makes a building contractor subcontract all plumbing work unless he also holds that trade licence, so your plumbing contractor pulls his own sub-permit under your building permit. You hand him the sealed plans and the plumbing riser, you put his licence and his insurance certificate in the job file, and you post the permit card in the yard with the job sign.',
+		fail:'Let a handyman run pipe under your permit and the licence on the line is yours, not his.',
+		grade:'1', src:'F.S. 489.113(3) — “A contractor shall subcontract all electrical, mechanical, plumbing, roofing, sheet metal, swimming pool, and air-conditioning work, unless such contractor holds a state certificate or registration in the respective trade category.”', layer:'permit'},
+
+	/* ---- step 1: before the sewer tie-in inspection ---- */
+	{id:'lo', z:2, sym:'Lo', name:'Snap the walls on the pad and mark every fixture', short:'Mark the fixtures', fam:'dr', row:1, needs:['pm'],
+		law:'You are digging a drain for a bathroom that does not exist yet. Miss by 4 in. and the toilet hits the tub.',
+		spec:'You chalk every interior wall onto the compacted pad off the floor plan, then you mark the centre of every fixture on the dirt. Toilets get 15 in. from the centreline to any wall, vanity or tub, and 21 in. of clear floor in front. You mark the wet wall, the kitchen, the laundry and the water heater, and you write the fixture name beside every mark so nobody is guessing at six in the morning.',
+		fail:'Mark a toilet 12 in. off the wall instead of 15 and you find out about it the day the tile goes down.',
+		grade:'1', src:SRC_P+' 405.3.1 — water closet not less than 15 in. from its centre to any wall, partition or vanity, with 21 in. of clearance in front. Fixture locations from the floor plan.', layer:'layout'},
+	{id:'tp', z:3, sym:'Tp', name:'Set the sewer tap and stand the cleanout at the property line', short:'Tap & cleanout', fam:'dr', row:1, needs:['lo'],
+		law:'The invert at the tap is the ceiling on every pipe in this house. You cannot slope up to it.',
+		spec:'You call the utility, you locate the lateral or you tap the main, and you shoot the invert elevation with a laser before you dig one foot of trench inside the forms. Then you run 4 in. from the tap back toward the house and you stand a cleanout riser at the property line with the cap at grade. Write the invert on the plan where the crew can read it.',
+		fail:'Dig the house drain first and then find the tap sits 9 in. higher than your longest run. Now you are pumping, or you are re-forming a slab.',
+		grade:'1', src:SRC_S+' — 303 Sewer Connection and 750 Utilities Sewer Cleanout. '+SRC_P+' 708 — a cleanout at the junction of the building drain and the building sewer.', layer:'tapin'},
+	{id:'i1', icon:'inspector', z:4, sym:'I1', name:'Sewer connection and cleanout inspection', short:'Sewer insp.', fam:'pp', row:1, gate:1, needs:['tp'],
+		law:'The tie-in is somebody else’s pipe. Somebody else signs for it.',
+		spec:'You call in a 303 — Sewer Connection and a 750 — Utilities Sewer Cleanout. Leave the tap open, leave the cleanout standing, and have the utility’s tie-in card on the job. Do not backfill the lateral until he signs it.',
+		fail:'Backfill it because the trench looked ugly and you open it again with a shovel and a witness.',
+		grade:'1', src:SRC_S, layer:'gate1', lit:['tapin']},
+
+	/* ---- step 2: before the underground plumbing inspection ---- */
+	{id:'bd', z:5, sym:'Bd', name:'Dig, bed and lay the building drain', short:'Building drain', fam:'dr', row:2, needs:['i1'],
+		law:'Water does not run on hope. It runs on slope.',
+		spec:'You dig the trench inside the forms and you bed it in clean sand, not rock and not spoil. You lay 4 in. main and you fall it 1/8 in. per foot; anything 2½ in. and smaller falls 1/4 in. per foot. You run 3 in. to every toilet and 2 in. to every tub, shower, kitchen and laundry line. You shoot every run with the laser as you lay it, not after.',
+		fail:'Lay it flat and the solids stop. Lay it too steep and the water runs off and leaves the solids behind. Both come back as a callback you cannot reach.',
+		grade:'1', src:SRC_P+' Table 704.1 — 1/4 in. per foot on 2½ in. and smaller, 1/8 in. per foot on 3 in. through 6 in.', layer:'bdrain'},
+	{id:'br', z:6, sym:'Br', name:'Wye and eighth bend at every branch', short:'Wye & 1/8 bend', fam:'dr', row:2, needs:['bd'],
+		law:'A fitting has a direction. Under a slab it has it forever.',
+		spec:'You use a wye and an eighth bend everywhere a branch joins a horizontal run under this slab, so the flow turns downstream instead of hitting a wall. You keep long-sweep fittings on every change of direction, and you set a cleanout at every change of direction greater than 45 degrees and not more than 100 ft. apart.',
+		fail:'Turn a branch against the flow and you have built a place for paper to stop. It never gets better, and it is under 4 in. of concrete.',
+		grade:'1', src:SRC_P+' 706 (fitting applications — horizontal-to-horizontal joins take a wye, a combination wye and eighth bend, or a long-sweep) and 708 (cleanouts).', layer:'branch'},
+	{id:'st', z:6, sym:'Sx', name:'Sanitary tee, laid on its back', short:'Tee on its back', fam:'dr', row:2, needs:['bd'], trap:true, altOf:'br',
+		law:'It fits. It glues. It holds the test. And it is wrong.',
+		spec:'You are short a wye, the supply house is 40 minutes out, and a sanitary tee makes the connection today. So you lay it on its back, you bring the branch in horizontally, you glue it, you bed it and you cover it. It holds a water test all day, because a water test does not care which way the flow turns.',
+		fail:'A sanitary tee on its back turns the branch straight into the side of the main. He puts a mirror and a light down the pipe and sees the throat facing him.',
+		grade:'5', src:SRC_P+' 706.3 — horizontal-to-horizontal connections use a wye, a combination wye and eighth bend, or a long-sweep fitting. Not a sanitary tee.', layer:'santee'},
+	{id:'wc', z:7, sym:'Wc', name:'Stub up at every fixture and cap every stub', short:'Stub & cap', fam:'dr', row:2, needs:['br|st'],
+		law:'Every stub you forget is a saw cut in a slab somebody just paid for.',
+		spec:'You bring a stub up at every mark: 3 in. at each water closet, 2 in. at each tub, shower, kitchen and laundry. You hold every stub plumb, you set it to the finished-floor height on the plan, and you cap every single one so the pour cannot get down it. Then you walk the pad with the plan in your hand and you count caps against the fixture schedule.',
+		fail:'Miss one stub and you are renting a concrete saw and cutting a trench across a finished slab for a lavatory.',
+		grade:'1', src:'The fixture schedule on the plans; '+SRC_P+' 709 — a water closet takes a 3 in. minimum drain.', layer:'stubs'},
+	{id:'tt', z:8, sym:'Tt', name:'Put a ten-foot head on it and leave the test standing', short:'Water test', fam:'dr', row:2, needs:['wc'],
+		law:'The test is not for you. It is for the man who has to believe you.',
+		spec:'You cap the low end, you stand a test riser, and you fill the whole underground system with water until you have a 10 ft. head on the lowest joint. You hold it 15 minutes and you walk every joint looking for a weep. Then you leave the water in it, and you leave it in until he has looked at it.',
+		fail:'Drain the test the night before because you needed the riser somewhere else, and he arrives to a dry system. That is a re-inspection fee and a day.',
+		grade:'1', src:SRC_P+' 312.2 — water test, not less than a 10 ft. head, held not less than 15 minutes.', layer:'utest'},
+	{id:'i2', icon:'inspector', z:9, sym:'I2', name:'Underground plumbing rough inspection', short:'Underground insp.', fam:'pp', row:2, gate:2, needs:['tt'], failsIf:['st'],
+		law:'Everything under this slab is buried forever. He sees it once.',
+		spec:'You call in a 301 — Plumbing Underground Rough, and it is the county’s first-priority inspection on the whole job. Leave the pipe open in the trench, leave the test standing, have sanitary facilities on the site, and hand him the plan with the fixture marks on it. Not one shovel of backfill until he signs.',
+		fail:'Backfill or pour before he comes and you rent a jackhammer and dig up a slab you already paid for.',
+		grade:'1', src:SRC_S+' priority 1 — 301 Plumbing Underground Rough.', layer:'gate2', lit:['bdrain','branch','stubs','utest']},
+
+	/* ---- step 3: before the slab inspection ---- */
+	{id:'pr', z:10, sym:'Pr', name:'Sleeve, brace and flag every stub before the concrete crew arrives', short:'Protect the stubs', fam:'dr', row:3, needs:['i2'],
+		law:'A concrete crew will walk on anything sticking out of the ground.',
+		spec:'You sleeve every stub where it passes through the slab so the concrete cannot grip the pipe, you brace each one plumb to a stake, you re-check every cap, and you flag the tops so a man carrying a screed sees them coming. Then you re-shoot two stubs at random against the plan before the truck is on the road.',
+		fail:'One stub knocked 3 in. out of plumb during the pour and you are coring a finished slab for a toilet flange.',
+		grade:'2', src:'Field practice — the sleeve keeps the slab off the pipe so it can move. Confirm the detail against your foundation plan.', layer:'protect'},
+	{id:'i3', icon:'inspector', z:11, sym:'I3', name:'Slab inspection', short:'Slab insp.', fam:'pp', row:3, gate:3, needs:['pr'],
+		law:'It is the concrete man’s inspection. Your pipe is in the picture.',
+		spec:'You stand there for the 503 — Slab even though the card is not yours. He looks at steel, poly, termite and your stub-ups on the same walk. Have the caps on, the stubs braced and the 301 already signed, because he will not pass a slab over an underground that never happened.',
+		fail:'Send nobody from the plumbing crew and a torn poly boot around your stub becomes your phone call at nine that night.',
+		grade:'1', src:SRC_S+' priority 2 — 503 Slabs.', layer:'gate3', lit:['stubs','protect']},
+
+	/* ---- step 4: before the water service inspection ---- */
+	{id:'jb1', z:12, sym:'J1', name:'The slab gets poured and the block goes up', short:'Slab & block', fam:'jb', row:4, needs:['i3'], link:true,
+		law:'You leave. Three trades come and go. Then you come back.',
+		spec:'You are off this job now. The concrete crew pours, the mason lays block, the tie beam takes steel and grout, and none of it is yours. What you do is set the top-out date off the mason’s finish date, and you call the truss plant yourself to hear when the roof actually lands. (That whole shell is walked step by step in <a href="'+HOUSE_URL+'" target="_blank" rel="noopener">HOUSE Block</a>.)',
+		fail:'Wait to be called and you show up two weeks after the drywall crew already booked.',
+		grade:'4', src:'Simplified on purpose — the shell is a whole model of its own.', layer:'shell'},
+	{id:'ws', z:13, sym:'Ws', name:'Trench the water service from the meter box to the house', short:'Water service', fam:'su', row:4, needs:['jb1'],
+		law:'One pipe feeds the whole house. Bury it once and bury it right.',
+		spec:'You set the meter box at the property line where the utility wants it, and you trench from the box to the point of entry at the slab. You lay the service in a sand bed with a tracer wire and warning tape over it, you sleeve it where it passes under the driveway, and you bring it up inside to a main shutoff a person can actually reach. Leave the trench open.',
+		fail:'Run it under the driveway with no sleeve, and the day it leaks you are breaking 6 in. of concrete the owner just paid to have stamped.',
+		grade:'2', src:SRC_S+' — 304 Water Connection and 751 Utilities Water Meter Box. Service size, depth and materials per the utility’s standard details — confirm with Indian River County Utilities.', layer:'wservice'},
+	{id:'i4', icon:'inspector', z:14, sym:'I4', name:'Water connection and meter box inspection', short:'Water insp.', fam:'pp', row:4, gate:4, needs:['ws'],
+		law:'The meter is theirs. Every inch on your side of it is yours.',
+		spec:'You call in a 304 — Water Connection and a 751 — Utilities Water Meter Box. Leave the trench open the whole length, have the line under working pressure, and leave the tracer wire visible. Backfill after he signs, and compact it in lifts so the driveway does not settle a year from now.',
+		fail:'Backfill 60 ft. of trench to keep the site tidy and you open all 60 ft. again.',
+		grade:'1', src:SRC_S, layer:'gate4', lit:['wservice']},
+
+	/* ---- step 5: before the top-out inspection ---- */
+	{id:'jb2', z:15, sym:'J2', name:'The roof goes on and gets dried in', short:'Roof & dry-in', fam:'jb', row:5, needs:['i4'],
+		law:'You do not run pipe in a house that is still catching rain.',
+		spec:'You wait for the trusses to be set, strapped and sheathed and for the roof to be dried in, because your vents go through that roof and your open walls have to stay dry. When the dry-in passes, you walk the attic before anybody else does and you pick the line every vent will take — between the trusses, never through one.',
+		fail:'Start top-out under an open roof and one Treasure Coast afternoon soaks the framing you are about to close in.',
+		grade:'4', src:SRC_S+' priority 5 — 603 Roof Dry-In. Simplified: the shell is its own model.', layer:'shell2'},
+	{id:'jb3', z:16, sym:'J3', name:'The interior walls go up', short:'Interior walls', fam:'jb', row:5, needs:['jb2'],
+		law:'You cannot drop a drain into a wall that is not standing.',
+		spec:'You wait for the framer to stand the interior partitions and furr the block walls, and then you walk the plumbing walls with him before he sheets anything. Every wall with a toilet or a shower valve in it gets built deeper — a 2x6 wet wall, or furring set out — because a 3 in. drain does not fit inside a 3½ in. stud.',
+		fail:'Let him frame the wet wall in 2x4 and your closet bend has nowhere to live. Now the framer is back on your dime.',
+		grade:'2', src:'Field practice; wall depth follows the pipe size on your riser diagram.', layer:'shell3'},
+	{id:'dv', z:17, sym:'Dv', name:'Drop the drains into the walls and set the trap arms', short:'Drains in the walls', fam:'dr', row:5, needs:['jb3'],
+		law:'A trap too far from its vent siphons itself dry, and then the sewer breathes into the house.',
+		spec:'You set a sanitary tee in the wall at every fixture and you run the trap arm to it at 1/4 in. per foot. You keep every trap inside the distance the table allows: 5 ft. on a 1¼ in. arm, 6 ft. on 1½ in., 8 ft. on 2 in., 12 ft. on 3 in., 16 ft. on 4 in. You set the closet bends, you set the tub waste, and you strap every line so nothing moves when the drywall goes on.',
+		fail:'Run a lavatory 9 ft. to its vent on a 1½ in. arm and the trap pulls dry every time the tub drains. The owner smells it in July.',
+		grade:'1', src:SRC_P+' Table 909.1 — maximum distance of a fixture trap from its vent.', layer:'dwvwall'},
+	{id:'co', z:18, sym:'Co', name:'Set the cleanout at the base of the stack', short:'Stack cleanout', fam:'dr', row:5, needs:['dv'],
+		law:'The day somebody has to snake this house, they will bless you or curse you. You decide that today.',
+		spec:'You set a cleanout at the base of every waste and soil stack, and you leave it 18 in. of clear space so a man can get a cable into it on 6 in. pipe and smaller. You put it where a machine can reach — a closet wall, a garage wall, the outside of the house — and never behind a finished shower.',
+		fail:'Bury the base cleanout behind tile and the first stoppage costs the owner a wall.',
+		grade:'1', src:SRC_P+' 708 — a cleanout at the base of each waste or soil stack, with 18 in. of clearance for rodding on 6 in. pipe and smaller.', layer:'stackco'},
+	{id:'vs', z:19, sym:'Vs', name:'Run the vents up and tie them into the stack', short:'Vents up', fam:'vt', row:5, needs:['co'],
+		law:'A drain is only half a pipe. The other half is the air behind the water.',
+		spec:'You carry a vent up from every fixture and you keep it dry — the tie into the vertical stack goes above the flood-level rim of the highest fixture it serves, never below it. No vent is smaller than 1¼ in., and no vent is smaller than half the drain it serves. You gather the branch vents in the attic and you take them out through as few roof penetrations as the plan allows.',
+		fail:'Tie a vent in horizontally below the flood rim and you have built a flat vent — a drain pretending to be a vent. It works until two fixtures run at once.',
+		grade:'1', src:SRC_P+' Ch. 9 — vent connections above the flood-level rim; minimum vent 1¼ in. and not less than half the drain served.', layer:'vents'},
+	{id:'vr', z:20, sym:'Vr', name:'Take the vents through the roof and boot them', short:'Vents through roof', fam:'vt', row:5, needs:['vs'],
+		law:'A vent that never reaches outside air is a decoration.',
+		spec:'You cut between the trusses — never through one — and you carry every vent up through the roof deck to stand not less than 6 in. above the roof surface. You keep each terminal at least 10 ft. horizontally from any door, openable window or air intake, or you carry it 3 ft. above the opening. Then you set the boot, you seal it into the underlayment, and you tell the roofer it is there.',
+		fail:'Cut a truss top chord for a 2 in. vent and you have bought an engineer’s letter and a repair before the framing inspection.',
+		grade:'1', src:SRC_P+' Ch. 9 — vent extension not less than 6 in. above the roof; terminal not within 10 ft. of an opening unless it is 3 ft. above it.', layer:'vroof'},
+	{id:'va', z:20, sym:'Vz', name:'Stop the vents in the attic and cap them', short:'Vents die in attic', fam:'vt', row:5, needs:['vs'], trap:true, altOf:'vr',
+		law:'It is warm up there and the air has to go somewhere. That is the whole argument, and it is wrong.',
+		spec:'You are not cutting six open holes in a roof that just dried in — it is raining and the roofer is not back for a week. So you run every vent up into the attic, you cap the ends, and you tell yourself you will take them out through the deck before drywall. Nobody sees a capped pipe in an attic full of trusses.',
+		fail:'A vent that ends in the attic pushes sewer gas into the ceiling and gives the traps nothing to breathe from. He puts a light in the attic at top-out and finds six caps.',
+		grade:'5', src:SRC_P+' Ch. 9 — every vent terminal extends to outside air, not less than 6 in. above the roof. An attic is not outside air.', layer:'vattic'},
+	{id:'wl', z:21, sym:'Wl', name:'Run the hot and the cold', short:'Hot & cold', fam:'su', row:5, needs:['vr|va'],
+		law:'Cold on the right, hot on the left, and nobody guessing inside a wall.',
+		spec:'You bring the service to a manifold or a main trunk and you run a line to every fixture. You keep hot and cold apart, or you insulate where they run together, you strap every line at the spacing the manufacturer prints, and you leave a loop of slack at every stub so the trim man has something to work with. Label the manifold ports with a marker before you close the wall.',
+		fail:'Run PEX across an attic in the Florida sun with no protection and you have started the clock on a failure the owner pays for.',
+		grade:'2', src:'Pipe type, support spacing and UV limits per the manufacturer’s listing — confirm against the material you are actually buying.', layer:'supply'},
+	{id:'sv', z:22, sym:'Sv', name:'Set the tub and shower valves', short:'Shower valves', fam:'su', row:5, needs:['wl'],
+		law:'Somebody flushes a toilet while a child is standing in the shower. That is what this valve is for.',
+		spec:'You set a balanced-pressure, thermostatic or combination valve at every shower and tub-shower — ASSE 1016 listed, no exceptions. You set it to the rough-in depth the trim kit calls for measured off the finished wall, not off the stud. Then you set the handle limit stop to 120 degrees and you write it on the valve with a marker so the trim man does not move it.',
+		fail:'Set it to the stud and the escutcheon floats 3/8 in. off the tile. Set the stop wide open and you have built a scald into a bathroom.',
+		grade:'1', src:SRC_P+' 424.3 — shower and tub-shower valves shall be ASSE 1016 balanced-pressure, thermostatic or combination type, with the limit stop set to a maximum of 120°F.', layer:'valves'},
+	{id:'np', z:23, sym:'Np', name:'Plate every hole within an inch and a half of the face', short:'Nail plates', fam:'su', row:5, needs:['sv'],
+		law:'The drywall man is not aiming at your pipe. He does not have to be.',
+		spec:'You walk every wall and every plate you drilled. Anywhere a pipe sits less than 1½ in. from the near edge of a stud, plate or joist, you screw on a steel shield plate not less than 0.062 in. thick, and you run it 2 in. past the sole plate and past the top plate. You do it before the insulator comes, because after him nobody can see the holes.',
+		fail:'Skip the plates and a 1⅝ in. drywall screw finds a hot line inside a finished wall. That one runs for a week before anybody notices the baseboard.',
+		grade:'1', src:SRC_P+' 305.8 — shield plates not less than 0.062 in. steel where piping is less than 1½ in. from the edge of the member, extending 2 in. above sole plates and below top plates.', layer:'plates'},
+	{id:'sp', z:24, sym:'Sp', name:'Set the shower pan liner and flood-test it', short:'Pan & flood test', fam:'fx', row:5, needs:['np'],
+		law:'The pan is the only thing between a shower and the framing under it.',
+		spec:'You set the liner over a pre-slope, you run it 3 in. up the wall past the finished threshold, you fold the corners instead of cutting them, and you clamp it into the drain. Then you plug the drain and you fill it with water not less than 2 in. deep measured at the threshold, and you hold it 15 minutes with a pencil mark on the wall. You leave it full for the inspector.',
+		fail:'Cut a corner of the liner to make it lie flat and the wall behind that shower rots quietly for six years.',
+		grade:'1', src:SRC_P+' 312.9 — shower liner test: fill to not less than 2 in. measured at the threshold and hold not less than 15 minutes.', layer:'pan'},
+	{id:'tt2', z:25, sym:'T2', name:'Put air on the drains and pressure on the water, and leave both on', short:'Both tests on', fam:'su', row:5, needs:['sp'],
+		law:'Two systems, two tests, two gauges. He will look at both.',
+		spec:'You cap the drain-waste-vent and you put 5 psi of air on it — or a 10 ft. head of water — and you hold it 15 minutes. You put the water system under the working pressure of the system, or 50 psi of air on non-plastic pipe, and you hold that 15 minutes too. Then you leave both gauges on, and you leave them where a man can read them from the floor.',
+		fail:'Bleed the tests off Friday so the crew can use the water, and come back Monday to an inspection with nothing to look at.',
+		grade:'1', src:SRC_P+' 312.3 (air test, 5 psi, 15 minutes), 312.2 (water test, 10 ft. head) and 312.5 (water supply test at working pressure, or 50 psi air on non-plastic pipe).', layer:'gauges'},
+	{id:'i5', icon:'inspector', z:26, sym:'I5', name:'Plumbing rough — top out', short:'Top out insp.', fam:'pp', row:5, gate:5, needs:['tt2'], failsIf:['va'],
+		law:'This is the last day anybody can see your work.',
+		spec:'You call in a 311 — Plumbing Rough (Top Out). Leave every wall open, both gauges on, the shower pan full, and the vents standing through the roof. You walk it with him with the riser diagram in your hand. Nothing gets insulated or sheeted until this one is signed.',
+		fail:'Let the insulator start the same morning and you fail on a wall he already filled — and now you are pulling insulation back out to prove a pipe.',
+		grade:'1', src:SRC_S+' priority 7 — 311 Plumbing Rough (Top Out), called alongside 203 Electric Rough and 403 A/C Rough.', layer:'gate5', lit:['dwvwall','stackco','vents','vroof','supply','valves','plates','pan','gauges']},
+
+	/* ---- step 6: before the gas piping inspection ---- */
+	{id:'gp', z:27, sym:'Gp', name:'Run the gas line from the meter to the appliances', short:'Gas piping', fam:'gs', row:6, needs:['i5'],
+		law:'Every other pipe in this house leaks water. This one leaks a fire.',
+		spec:'You size the line off the appliance list and the developed length of the run, not off what happens to be on the truck. You run black iron or listed CSST, you bond the CSST to the grounding electrode system, you sleeve anything passing through masonry, and you bring a drip leg and a shutoff to every appliance. You cap every outlet and you leave the whole run exposed.',
+		fail:'Undersize the run and the range and the water heater cannot both fire. Skip the CSST bond and a nearby lightning strike puts a pinhole in a live gas line.',
+		grade:'2', src:SRC_G+' Ch. 4 — sizing from the appliance load and developed length; CSST bonding per the manufacturer’s listing. Confirm sizing against your gas riser.', layer:'gas'},
+	{id:'gt', z:28, sym:'Gt', name:'Cap it and put three pounds on a gauge for ten minutes', short:'Gas test', fam:'gs', row:6, needs:['gp'],
+		law:'A gas test is not a formality. It is the only proof you will ever have.',
+		spec:'You cap or plug every opening, you pressurise the system to not less than 3 psig, and you hold it not less than 10 minutes with no drop. You use a gauge whose increments are no greater than one-tenth of the test pressure, because a needle that cannot move cannot tell you anything. You soap every joint while it is under pressure, and you leave the gauge on it.',
+		fail:'Test with a 100 psi gauge and a real leak is a needle that never moves. You just certified it.',
+		grade:'1', src:SRC_G+' 406 — test pressure not less than 3 psig, held not less than 10 minutes, on a gauge with increments not greater than one-tenth of the test pressure.', layer:'gauge2'},
+	{id:'i6', icon:'inspector', z:29, sym:'I6', name:'Gas piping rough inspection', short:'Gas insp.', fam:'pp', row:6, gate:6, needs:['gt'],
+		law:'Nobody lights anything until somebody signs.',
+		spec:'You call in a 400 — Gas Piping Rough. Leave the whole run exposed, the gauge on it and holding, and the appliance list on the job. He reads the gauge before he reads anything else you hand him.',
+		fail:'Cover a gas line before this one and you are opening a finished wall to show him 6 ft. of pipe.',
+		grade:'1', src:SRC_S+' — 400 Gas Piping - Rough.', layer:'gate6', lit:['gas','gauge2']},
+
+	/* ---- step 7: before the final ---- */
+	{id:'jb4', z:30, sym:'J4', name:'Insulation, drywall and tile go in', short:'Walls close up', fam:'jb', row:7, needs:['i6'],
+		law:'You leave again. When you come back, nothing is where you left it.',
+		spec:'You are off the job through insulation, drywall, texture, paint and tile. Before you go, you photograph every wall you opened — wide and close, with a tape in the shot — because that photo set is what settles the argument eight years from now. Then you book the trim crew off the tile finish date, not off the drywall date.',
+		fail:'Book trim off drywall and you have men standing in a house where the shower walls are not tiled and not one valve can be trimmed.',
+		grade:'4', src:'Simplified on purpose. Photograph the open walls — it is the cheapest insurance on the job.', layer:'closed'},
+	{id:'wh', z:31, sym:'Wh', name:'Set the water heater, the pan and the relief line', short:'Water heater', fam:'fx', row:7, needs:['jb4'],
+		law:'A water heater is a pressure vessel with a warranty. Treat it like the first thing, not the last.',
+		spec:'You set the heater in a pan not less than 1½ in. deep and you run the pan drain in not less than 3/4 in. pipe to an indirect waste or out to daylight. You run the temperature-and-pressure relief discharge full size off the valve outlet, downhill, with no valve in it and no threads on the end, and you terminate it not more than 6 in. above the floor or the receptor. You put a shutoff on the cold and a union either side so the next man can change it.',
+		fail:'Thread the end of a relief line and somebody caps it. Skip the pan in an interior closet and one tank ruins a hallway of engineered floor.',
+		grade:'1', src:SRC_P+' 504.6 (relief discharge piping) and 504.7 (pan not less than 1½ in. deep, drain not less than 3/4 in.).', layer:'wheater'},
+	{id:'ex', z:32, sym:'Ex', name:'Set the expansion tank', short:'Expansion tank', fam:'su', row:7, needs:['wh'],
+		law:'Heat water in a closed pipe and something has to give. Make it the tank.',
+		spec:'If there is a check valve, a backflow preventer or a pressure-reducing valve on the service, this house is a closed system and you set a thermal expansion tank on the cold inlet. You pre-charge it to the incoming static pressure — you measure that with a gauge on a hose bibb, you do not guess it — and you support the tank off the structure, not off the pipe.',
+		fail:'Skip it on a closed system and the relief valve weeps every afternoon. The owner calls it a leaking water heater. It is your missing tank.',
+		grade:'1', src:SRC_P+' 607.3 — thermal expansion control required where the system is closed by a check valve, backflow preventer or pressure-reducing valve.', layer:'etank'},
+	{id:'ft', z:33, sym:'Ft', name:'Set the toilets', short:'Set the toilets', fam:'fx', row:7, needs:['ex'],
+		law:'The flange sits on the finished floor. Not under it, and not on the slab.',
+		spec:'You set the closet flange on top of the finished tile and you anchor it to the floor, and you check your 15 in. from the centreline to the wall or vanity and your 21 in. of clear floor in front. You set the bowl on a new wax ring or a gasket, you snug the bolts by hand, you shim before you caulk, and you fill and flush it twice before you leave that room.',
+		fail:'Set the flange under the tile and the wax has to bridge 3/8 in. It seals for a year, and then it does not, and it drips into a ceiling.',
+		grade:'1', src:SRC_P+' 405.3.1 (clearances) and 405.4 (flange set on and secured to the finished floor).', layer:'toilets'},
+	{id:'lv', z:34, sym:'Lv', name:'Set the sinks, the traps and the dishwasher', short:'Sinks & traps', fam:'fx', row:7, needs:['ft'],
+		law:'A P-trap holds water. An S-trap holds water until the next flush pulls it out.',
+		spec:'You set every lavatory and the kitchen sink, and you trap every one with a P-trap holding a seal not less than 2 in. and not more than 4 in. No S-traps, no bell traps, no flexible corrugated tubing on a trap arm. You take the dishwasher discharge up to a high loop under the counter or through an air gap on the deck, and you connect it above the trap.',
+		fail:'Drop a kitchen trap straight down into the floor with no vent and you have built an S-trap. It burps at the owner every time the washer drains.',
+		grade:'1', src:SRC_P+' 1002.1 and 1002.2 (trap seal 2 in. to 4 in.; S-traps prohibited) and 802 (dishwasher discharged indirectly).', layer:'lavs'},
+	{id:'hb', z:35, sym:'Hb', name:'Set the hose bibbs with vacuum breakers', short:'Hose bibbs', fam:'su', row:7, needs:['lv'],
+		law:'A hose lying in a puddle is connected to the drinking water in that house.',
+		spec:'You set a hose bibb front and back, and every one of them gets a nonremovable vacuum breaker — not a screw-on a man can take off with pliers. You block behind it so the wall carries the load, and you seal the penetration through the stucco with sealant, not with foam.',
+		fail:'A removable vacuum breaker gets removed on day one, and the county writes it up at final anyway.',
+		grade:'1', src:SRC_P+' 608 — backflow protection; hose connections require a nonremovable hose-connection vacuum breaker.', layer:'hosebibb'},
+	{id:'wm2', z:36, sym:'Wb', name:'Set the washer box and the standpipe', short:'Washer box', fam:'fx', row:7, needs:['hb'],
+		law:'A washing machine pumps. Give that water somewhere to go before it goes on the floor.',
+		spec:'You set the washer box in the wall with hot on the left and cold on the right and a shutoff on each. You run the standpipe not less than 18 in. and not more than 42 in. above the trap weir, and you set the trap 6 in. to 18 in. above the floor. Then you vent it like any other fixture.',
+		fail:'Set the standpipe 12 in. tall and the machine siphons its own drain, or it pushes water back out at the box every spin cycle.',
+		grade:'1', src:SRC_P+' 802.4 and 1002 — standpipe 18 in. to 42 in. above the trap weir, trap 6 in. to 18 in. above the floor.', layer:'washer'},
+	{id:'fl', z:37, sym:'Fl', name:'Fill every trap, run every fixture, set every stop', short:'Walk it wet', fam:'fx', row:7, needs:['wm2'],
+		law:'A dry trap is an open sewer with a nice fixture sitting on top of it.',
+		spec:'You walk the whole house with water running. You fill every trap, including the ones nobody has used — the guest bath, the laundry, the floor drain. You check the temperature at the farthest fixture and you confirm every shower stop is at 120 degrees. You run the dishwasher a cycle, you fill and drain the tub, you put a dry hand under every sink, and you clean the aerators before you hand it over.',
+		fail:'Hand over a house with a dry guest-bath trap and the first thing the owner smells in their new house is a sewer.',
+		grade:'1', src:SRC_P+' 424.3 (120°F limit stop) and 1002 (trap seals). The dry-hand check is field practice.', layer:'walkwet'},
+	{id:'i7', icon:'inspector', z:38, sym:'I7', name:'Final inspection', short:'Final insp.', fam:'pp', row:7, gate:7, needs:['fl'],
+		law:'The last stamp on this trade is the one that lets somebody move in.',
+		spec:'You call in the 999 — Final Inspection with your plumbing final in it. Have every fixture set and running, every trap wet, the water heater labelled and its relief line terminated, the expansion tank on, vacuum breakers on both bibbs, and every shower stop at 120. Hand him the riser diagram you have been carrying since the underground.',
+		fail:'One missing vacuum breaker on a back hose bibb and you are out for a re-inspection while the owner sits in a hotel.',
+		grade:'1', src:SRC_S+' priority 11 — 999 Final Inspection.', layer:'gate7', lit:['wheater','etank','toilets','lavs','hosebibb','washer','walkwet']},
+];
+const byId = Object.fromEntries(PARTS.map(p=>[p.id,p]));
+const famById = Object.fromEntries(FAMS.map(f=>[f.id,f]));
+const fill = (h,h2)=>`linear-gradient(155deg, color-mix(in srgb, ${h} 58%, #ffffff) 0%, ${h} 46%, ${h2} 100%)`;
+const NG = ROWS.length;
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {placed:new Set(), leaks:0, fails:0, passed:new Set(), burned:new Set(), failedRows:new Set(), view:'xray', sel:null, mode:'deck'};
+const stage = document.getElementById('stage');
+const SORTED = PARTS.slice().sort((a,b)=>a.z-b.z || (a.trap?1:0)-(b.trap?1:0));
+const ORDER = SORTED.filter(p=>p.fam!=='pp');        // the ring: what goes on the house
+const PAPER = SORTED.filter(p=>p.fam==='pp');        // the shelf: permit + the ten inspections
+const N = ORDER.length;
+// clockwise from 12 o'clock, spaced by arc length so the flat top of a tall screen is not crowded
+let ANGS = [];
+const ANG = i => ANGS[i];
+function spaceRing(rx, ry){
+	const M = 720, len = [0]; let prev = [rx*Math.cos(-Math.PI/2), ry*Math.sin(-Math.PI/2)];
+	for(let k=1;k<=M;k++){ const a = -Math.PI/2 + 2*Math.PI*k/M; const p = [rx*Math.cos(a), ry*Math.sin(a)]; len.push(len[k-1] + Math.hypot(p[0]-prev[0], p[1]-prev[1])); prev = p; }
+	const total = len[M];
+	ANGS = ORDER.map((_,i)=>{ const s = total*(i+0.5)/N; let k=0; while(k<M && len[k+1]<s) k++; const f=(s-len[k])/(len[k+1]-len[k]); return -Math.PI/2 + 2*Math.PI*(k+f)/M; });
+}
+const MID = (i,j) => { let a = ANGS[i], b = ANGS[j]; if(b < a) b += 2*Math.PI; return (a+b)/2; };
+let geo = {cx:0,cy:0,rx:0,ry:0};
+
+function el(tag, cls){ const n=document.createElement(tag); if(cls) n.className=cls; return n; }
+const svgNS='http://www.w3.org/2000/svg';
+function mk(tag, attrs){ const n=document.createElementNS(svgNS,tag); for(const k in attrs) n.setAttribute(k, attrs[k]); return n; }
+
+/* ============================================================
+   THE RING — the table's rows become arcs, its tiles a dial
+   ============================================================ */
+function inspectorSVG(n, ink){
+	return `<svg viewBox="0 0 34 32" width="100%" height="100%" aria-hidden="true">
+		<circle cx="11" cy="7.5" r="4.2" fill="${ink}"/>
+		<path d="M3.5 29 v-9 a7.5 7.5 0 0 1 15 0 v9 z" fill="${ink}"/>
+		<path d="M16 21 L21 17" stroke="${ink}" stroke-width="2.6" stroke-linecap="round"/>
+		<circle cx="24.5" cy="14.5" r="7" fill="rgba(255,255,255,.55)" stroke="${ink}" stroke-width="2.2"/>
+		<path d="M29.5 19.5 L33 23" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>
+		<text x="24.5" y="17.8" text-anchor="middle" font-family="Iowan Old Style,Palatino Linotype,Palatino,Georgia,serif" font-size="${n>9?8.5:10}" font-weight="700" fill="${ink}">${n}</text>
+	</svg>`;
+}
+function permitSVG(ink){
+	return `<svg viewBox="0 0 32 32" width="100%" height="100%" aria-hidden="true">
+		<path d="M7 3 h13 l6 6 v20 h-19 z" fill="rgba(255,255,255,.75)" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round"/>
+		<path d="M20 3 v6 h6" fill="none" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round"/>
+		<path d="M10.5 13 h11 M10.5 17 h11 M10.5 21 h7" stroke="${ink}" stroke-width="1.6" stroke-linecap="round"/>
+		<circle cx="21" cy="24" r="3.2" fill="none" stroke="#b3382a" stroke-width="1.6"/>
+	</svg>`;
+}
+/* ---------- the picture on the face of every card: keyed off p.layer, still data ---------- */
+const ART = {
+	layout:(k)=>`<path d="M5 38h54" stroke-dasharray="5 4"/><path d="M20 38V10" stroke-dasharray="5 4"/><path d="M44 38V18" stroke-dasharray="5 4"/><circle cx="20" cy="38" r="3.4" fill="${k}" stroke="none"/><circle cx="44" cy="38" r="3.4" fill="${k}" stroke="none"/><path d="M9 14l5 5-5 5" /><path d="M14 19H5"/>`,
+	tapin:(k)=>`<path d="M4 40h56" stroke-width="4"/><path d="M14 40V12"/><rect x="9" y="6" width="10" height="6"/><path d="M14 30h22l10 10"/><path d="M46 44V36"/>`,
+	bdrain:(k)=>`<path d="M4 14L60 34" stroke-width="4"/><path d="M4 8v10M60 28v10"/><path d="M14 40h34" stroke-dasharray="4 4"/><path d="M44 36l6 4-6 4"/>`,
+	branch:(k)=>`<path d="M4 34h56" stroke-width="4"/><path d="M30 34l10-14"/><path d="M40 20V8"/><circle cx="34" cy="30" r="3.4"/>`,
+	santee:(k)=>`<path d="M4 34h56" stroke-width="4"/><path d="M34 34V10"/><path d="M26 27h16v7H26z" fill="${k}" stroke="none" opacity=".35"/><path d="M44 12l8 8-8 8"/>`,
+	stubs:(k)=>`<path d="M4 36h56" stroke-width="4"/><path d="M16 36V14M32 36V14M48 36V14"/><rect x="12" y="7" width="8" height="6" fill="${k}" stroke="none"/><rect x="28" y="7" width="8" height="6" fill="${k}" stroke="none"/><rect x="44" y="7" width="8" height="6" fill="${k}" stroke="none"/>`,
+	utest:(k)=>`<path d="M6 40h48" stroke-width="4"/><path d="M22 40V6"/><path d="M15 12h14" stroke-width="4"/><path d="M38 40V22h10"/><path d="M22 22h0"/><path d="M15 18h14M15 24h14M15 30h14" opacity=".5"/>`,
+	protect:(k)=>`<path d="M4 38h56" stroke-width="4"/><path d="M22 38V10M42 38V10"/><rect x="17" y="14" width="10" height="20" opacity=".45"/><rect x="37" y="14" width="10" height="20" opacity=".45"/><path d="M10 38l8-16M56 38l-8-16"/>`,
+	shell:(k)=>`<rect x="6" y="26" width="52" height="14"/><path d="M6 33h52M20 26v14M40 26v14"/><path d="M10 20h44"/>`,
+	wservice:(k)=>`<rect x="6" y="10" width="14" height="12"/><path d="M13 22v10h36"/><path d="M49 32V14"/><path d="M43 44h14" stroke-dasharray="4 4"/><path d="M26 32h0"/>`,
+	shell2:(k)=>`<path d="M4 36h56L32 12Z"/><path d="M32 12v24M18 36l8-12M46 36l-8-12"/>`,
+	shell3:(k)=>`<path d="M6 10h52M6 40h52"/><path d="M16 10v30M30 10v30M44 10v30"/><circle cx="37" cy="25" r="4"/>`,
+	dwvwall:(k)=>`<path d="M20 6v38" stroke-width="4"/><path d="M20 18h22"/><path d="M42 18v8"/><path d="M20 32h16"/><path d="M44 12v12" stroke-dasharray="3 3"/><path d="M36 32l6 5"/>`,
+	stackco:(k)=>`<path d="M24 4v30" stroke-width="4"/><path d="M24 34l10 10h22"/><circle cx="24" cy="38" r="6"/><path d="M20 38h8"/><path d="M44 10h14M51 6v8" opacity=".55"/>`,
+	vents:(k)=>`<path d="M14 44V16h36v28" stroke-dasharray="0"/><path d="M14 16V8M32 44V22h18"/><path d="M50 16V8"/><path d="M8 8h12M44 8h12"/>`,
+	vroof:(k)=>`<path d="M4 32L32 12l28 20"/><path d="M24 32V10"/><path d="M18 14h12" stroke-width="4"/><path d="M18 20q6-4 12 0" opacity=".6"/><path d="M42 40h14M49 36v8" opacity=".5"/>`,
+	vattic:(k)=>`<path d="M4 34L32 14l28 20"/><path d="M24 34V22"/><rect x="19" y="17" width="10" height="5" fill="${k}" stroke="none"/><path d="M40 26l6 6-6 6"/><path d="M8 40h48" opacity=".4"/>`,
+	supply:(k)=>`<rect x="6" y="16" width="10" height="18"/><path d="M16 21h40M16 29h40"/><path d="M50 21v-9M50 29v11"/><circle cx="56" cy="21" r="2.6" fill="${k}" stroke="none"/><circle cx="56" cy="29" r="2.6" fill="${k}" stroke="none"/>`,
+	valves:(k)=>`<circle cx="32" cy="24" r="11"/><path d="M32 13V4M32 44v-9M21 24H8M56 24H43"/><path d="M27 24h10" stroke-width="4"/>`,
+	plates:(k)=>`<path d="M14 4v40M42 4v40"/><path d="M8 24h48" stroke-width="4"/><rect x="9" y="15" width="10" height="18" fill="${k}" stroke="none" opacity=".55"/><rect x="37" y="15" width="10" height="18" fill="${k}" stroke="none" opacity=".55"/>`,
+	pan:(k)=>`<path d="M8 20v16a4 4 0 0 0 4 4h40a4 4 0 0 0 4-4V20"/><path d="M8 26h48" stroke-width="4" opacity=".45"/><path d="M12 20V12h40v8"/><circle cx="32" cy="36" r="3"/>`,
+	gauges:(k)=>`<circle cx="18" cy="20" r="10"/><path d="M18 20l5-6"/><path d="M18 30v12"/><circle cx="46" cy="20" r="10"/><path d="M46 20l-6-4"/><path d="M46 30v12"/><path d="M8 42h48"/>`,
+	gas:(k)=>`<rect x="5" y="14" width="13" height="14"/><path d="M11 28v12h40V18"/><path d="M51 18V8"/><path d="M33 40v6" stroke-width="4"/><path d="M44 12h14" opacity=".5"/>`,
+	gauge2:(k)=>`<circle cx="32" cy="18" r="13"/><path d="M32 18l8-8"/><path d="M32 31v13"/><path d="M20 44h24"/><text x="32" y="24" text-anchor="middle" font-size="9" font-family="Georgia,serif" fill="${k}" stroke="none">3</text>`,
+	closed:(k)=>`<rect x="6" y="8" width="52" height="32"/><circle cx="18" cy="16" r="1.8" fill="${k}"/><circle cx="32" cy="16" r="1.8" fill="${k}"/><circle cx="46" cy="16" r="1.8" fill="${k}"/><circle cx="18" cy="32" r="1.8" fill="${k}"/><circle cx="32" cy="32" r="1.8" fill="${k}"/><circle cx="46" cy="32" r="1.8" fill="${k}"/>`,
+	wheater:(k)=>`<rect x="18" y="6" width="22" height="28" rx="4"/><path d="M12 34h34v6H12z"/><path d="M40 14h10v26"/><path d="M46 44h10" opacity=".6"/><path d="M29 6V2"/>`,
+	etank:(k)=>`<rect x="30" y="10" width="20" height="22" rx="8"/><path d="M30 21H8"/><path d="M8 8v26"/><path d="M40 32v8"/><path d="M36 40h8"/>`,
+	toilets:(k)=>`<rect x="10" y="6" width="16" height="14" rx="2"/><path d="M8 22h26a13 10 0 0 1-26 0z"/><path d="M16 32v8h10v-8"/><path d="M44 40h12M50 34v12" opacity=".55"/>`,
+	lavs:(k)=>`<path d="M8 16h30a15 9 0 0 1-30 0z"/><path d="M23 25v6"/><path d="M23 31c0 6 8 6 8 0v-6"/><path d="M31 25v-2"/><path d="M44 12v10a6 6 0 0 0 6 6h6"/><path d="M50 12V6"/>`,
+	hosebibb:(k)=>`<path d="M6 10v30" stroke-width="4"/><path d="M8 24h18"/><circle cx="31" cy="24" r="5"/><path d="M36 24h6v6"/><path d="M42 30c8 0 8 10 0 10h-6"/><path d="M27 16h8" stroke-width="4"/>`,
+	washer:(k)=>`<rect x="6" y="10" width="22" height="22" rx="2"/><circle cx="17" cy="21" r="2.6" fill="${k}"/><path d="M28 16h8v28"/><path d="M36 44c0-8 8-8 8 0"/><path d="M44 44V20"/><path d="M50 12h8" opacity=".5"/>`,
+	walkwet:(k)=>`<path d="M14 8v8"/><path d="M10 16h8"/><path d="M14 22v6"/><path d="M8 30h12v6a6 6 0 0 1-12 0z"/><path d="M34 10c6 8 9 12 9 16a9 9 0 0 1-18 0c0-4 3-8 9-16z"/><path d="M52 12v24M48 36h8"/>`,
+};
+function artSVG(p, ink){
+	if(p.icon==='inspector') return inspectorSVG(p.row, ink);
+	if(p.icon==='permit') return permitSVG(ink);
+	const g = ART[p.layer];
+	return `<svg viewBox="0 0 64 48" width="100%" height="100%" aria-hidden="true" fill="none" stroke="${ink}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${g?g(ink):'<circle cx="32" cy="24" r="12"/>'}</svg>`;
+}
+
+/* ---------- the face of a card, small on the ring or big in the deck ---------- */
+function cardFace(p, big){
+	const f = famById[p.fam], r = ROWS[p.row-1], ink = '#161410';
+	const art = `<span class="pic">${artSVG(p, ink)}</span>`;
+	const lk = p.link ? '<span class="lk" title="Opens HOUSE Block">↗</span>' : '';
+	if(big) return `<span class="z">${p.z}</span><span class="st">Step ${p.row}<b>${r.label}</b></span>${art}`
+		+ `<span class="nm">${p.name}</span><span class="fm">${f.label} · ${f.q}</span>${lk}`;
+	return `<span class="z">${p.z}</span><span class="st">${p.row}</span>${art}<span class="nm">${p.short}</span>${lk}`;
+}
+function tileNode(p, live, big){
+	const f = famById[p.fam];
+	const b = el('button', 'tile' + (big?' big':'')); b.type='button'; b.dataset.id = p.id;
+	b.style.background = fill(f.hue,f.hueTo);
+	b.setAttribute('aria-label', `Card ${p.z}. ${p.name}. ${f.label}, step ${p.row} ${ROWS[p.row-1].label}.`);
+	b.innerHTML = cardFace(p, big);
+	if(live){
+		b.addEventListener('pointerdown', startDrag);
+		b.addEventListener('pointerenter', e=>{ if(!drag && !big && window.matchMedia('(hover:hover)').matches) openPeek(p.id, {}); });
+		b.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); attempt(p.id); } });
+	}
+	return b;
+}
+
+/* ============================================================
+   THE DECK — 40 cards in one stack, drawn in order.
+   The ring is still here, one button away.
+   ============================================================ */
+let deckIdx = 0;
+const deckBox = document.getElementById('deck');
+function deckAvail(){ return SORTED.filter(p=>!state.placed.has(p.id) && !state.burned.has(p.id) && !coveredBy(p)); }
+function deckGo(d){ const a=deckAvail(); if(!a.length) return; deckIdx=(deckIdx+d+a.length)%a.length; renderDeck(); refreshTiles(); }
+function deckSeek(){ const a=deckAvail(); const i=a.findIndex(ready); deckIdx = i>=0 ? i : 0; }
+function renderDeck(){
+	if(state.mode!=='deck') return;
+	const a = deckAvail();
+	const host = document.getElementById('dcard');
+	if(!a.length){ host.innerHTML='<div class="ddone">Every card is played.</div>'; document.getElementById('dcount').textContent=''; document.getElementById('dpips').innerHTML=''; return; }
+	deckIdx = ((deckIdx % a.length) + a.length) % a.length;
+	const p = a[deckIdx];
+	host.innerHTML=''; host.appendChild(tileNode(p, true, true));
+	document.getElementById('dcount').innerHTML =
+		`Card <b>${p.z}</b> of <b>${SORTED.length}</b> &nbsp;·&nbsp; Step <b>${p.row}</b> of <b>${ROWS.length}</b>`;
+	document.getElementById('dleft').textContent = a.length + ' left in the deck';
+	document.getElementById('dpips').innerHTML = ROWS.map(r=>{
+		const k = state.passed.has(r.n) ? 'pass' : state.failedRows.has(r.n) ? 'fail' : (openRow()===r.n ? 'open' : '');
+		return `<i class="${k}" title="Step ${r.n} — ${r.label}"></i>`;
+	}).join('');
+	deckBox.classList.toggle('ready', ready(p));
+}
+function setMode(m){
+	state.mode = m;
+	document.getElementById('dall').textContent = m==='deck'
+		? (innerWidth < 760 ? `See all ${SORTED.length}` : `See all ${SORTED.length} around the house`)
+		: 'Back to the deck';
+	stage.classList.toggle('deckmode', m==='deck');
+	if(m==='deck') deckSeek();
+	layout(); refreshTiles();
+	say('', m==='deck'
+		? `<b>The deck.</b> ${SORTED.length} cards, ${ROWS.length} steps. Drag the top card onto the house, or use the arrows to look through the deck.`
+		: `<b>All ${SORTED.length} cards.</b> The ring is the whole job at once, clockwise from the top. Gold ring = you can play it now.`);
+}
+
+function buildRing(){
+	stage.querySelectorAll('.tile:not(.big)').forEach(t=>t.remove());
+	SORTED.forEach(p=>stage.appendChild(tileNode(p,true,false)));
+	document.getElementById('dprev').addEventListener('click', ()=>deckGo(-1));
+	document.getElementById('dnext').addEventListener('click', ()=>deckGo(1));
+	document.getElementById('dall').addEventListener('click', ()=>setMode(state.mode==='deck'?'ring':'deck'));
+	window.addEventListener('keydown', e=>{
+		if(state.mode!=='deck' || e.metaKey || e.ctrlKey) return;
+		if(e.key==='ArrowLeft'){ e.preventDefault(); deckGo(-1); }
+		if(e.key==='ArrowRight'){ e.preventDefault(); deckGo(1); }
+	});
+	setMode('deck');
+}
+
+function layout(){
+	const W = stage.clientWidth, H = stage.clientHeight;
+	deckBox.style.display = state.mode==='deck' ? '' : 'none';
+	document.getElementById('dial').style.display = state.mode==='deck' ? 'none' : '';
+	if(state.mode==='deck') layoutDeck(W,H); else layoutRing(W,H);
+}
+function fitBox(x0,y0,x1,y1){                       // biggest 800:560 box in that rectangle
+	const k = 800/560, w = x1-x0, h = y1-y0;
+	let bw = Math.min(w, h*k), bh = bw/k;
+	return [x0 + (w-bw)/2, y0 + (h-bh)/2, bw, bh];
+}
+function layoutDeck(W,H){
+	const narrow = W < 760;
+	let x0,y0,x1,y1;
+	if(narrow){
+		deckBox.style.left='50%'; deckBox.style.transform='translateX(-50%)';
+		deckBox.style.bottom='10px'; deckBox.style.top='auto';
+		x0 = 10; x1 = W-10; y0 = 190; y1 = H - (deckBox.offsetHeight||196) - 74;
+	} else {
+		const dw = deckBox.offsetWidth || 246;
+		deckBox.style.left='16px'; deckBox.style.transform='none';
+		const dh = deckBox.offsetHeight || 380;
+		deckBox.style.top = Math.max(80, Math.min(152, H - dh - 96)) + 'px'; deckBox.style.bottom='auto';
+		x0 = dw + 34; x1 = W - 18; y0 = 84; y1 = H - 104;
+	}
+	const [bx,by,bw,bh] = fitBox(x0,y0,x1,y1);
+	const box = document.getElementById('housebox');
+	box.style.left=bx+'px'; box.style.top=by+'px'; box.style.width=bw+'px'; box.style.height=bh+'px';
+	const msg = document.getElementById('msg');
+	msg.style.left = (bx + bw/2) + 'px'; msg.style.top = (by + bh + 4) + 'px';
+	geo.tw = 60; geo.th = 52;
+}
+function layoutRing(W,H){
+	const tw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tw'));
+	const th = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--th'));
+	const cx = W/2, cy = H/2;
+	const rx = W/2 - tw/2 - 12, ry = H/2 - th/2 - 12;
+	geo = {cx,cy,rx,ry,tw,th,stagger:1};
+	spaceRing(rx, ry);
+	ORDER.forEach((p,i)=>{
+		const t = stage.querySelector(`.tile[data-id="${p.id}"]:not(.big)`); if(!t) return;
+		const a = ANG(i);
+		t.style.left = (cx + rx*Math.cos(a))+'px'; t.style.top = (cy + ry*Math.sin(a))+'px';
+	});
+	const irx = rx - tw/2 - 18, iry0 = ry - th/2 - 18 - 14;
+	const k = 800/560;
+	const fit = (iry)=>{ const b = 1/Math.sqrt((k/irx)**2 + (1/iry)**2); return [k*b, b]; };
+	let rows = 1, a, b;
+	for(let pass=0; pass<2; pass++){
+		[a,b] = fit(iry0 - rows*(th+10)/2);
+		const top = cy - b + rows*(th+10)/2 - 10;
+		const shelfY = top - th/2 - 8 - (rows-1)*(th+6);
+		const v = Math.min(0.98, Math.abs(shelfY - cy)/ry);
+		const avail = 2*(rx*Math.sqrt(1-v*v) - tw/2 - 10);
+		rows = Math.ceil(PAPER.length / Math.max(3, Math.floor(avail/(tw+4))));
+	}
+	const box = document.getElementById('housebox');
+	box.style.width = (2*a)+'px'; box.style.height = (2*b)+'px';
+	const top = cy - b + rows*(th+10)/2 - 10;
+	box.style.left = (cx-a)+'px'; box.style.top = top+'px';
+	const perRow = Math.ceil(PAPER.length/rows);
+	for(let r=0; r<rows; r++){
+		const items = PAPER.slice(r*perRow, (r+1)*perRow);
+		const gap = Math.min(12, Math.max(4, (2*a - items.length*tw)/(items.length+1)));
+		items.forEach((p,i)=>{
+			const t = stage.querySelector(`.tile[data-id="${p.id}"]:not(.big)`); if(!t) return;
+			t.style.left = (cx + (i-(items.length-1)/2)*(tw+gap))+'px';
+			t.style.top = (top - th/2 - 8 - (rows-1-r)*(th+6))+'px';
+		});
+	}
+	const msg = document.getElementById('msg');
+	msg.style.left = '50%'; msg.style.top = (top + 2*b - 6)+'px';
+	drawDial();
+}
+function drawDial(){
+	const d = document.getElementById('dial'); d.innerHTML='';
+	if(state.mode!=='ring') return;
+	const {cx,cy,rx,ry} = geo;
+	const pt = a => [cx+rx*Math.cos(a), cy+ry*Math.sin(a)];
+	ROWS.forEach(r=>{
+		const idx = ORDER.map((p,i)=>p.row===r.n?i:-1).filter(i=>i>=0);
+		if(!idx.length) return;
+		const i0 = idx[0], i1 = idx[idx.length-1];
+		const a0 = (i0===0 ? -Math.PI/2 : MID(i0-1, i0)) + 0.02, a1 = (i1===N-1 ? 3*Math.PI/2 : MID(i1, i1+1)) - 0.02;
+		const [x0,y0]=pt(a0), [x1,y1]=pt(a1);
+		const large = (a1-a0) > Math.PI ? 1 : 0;
+		const status = state.passed.has(r.n) ? 'pass' : state.failedRows.has(r.n) ? 'fail' : (openRow()===r.n ? 'open' : '');
+		d.appendChild(mk('path',{d:`M${x0},${y0} A${rx},${ry} 0 ${large} 1 ${x1},${y1}`, class:'arc '+status}));
+		const am = (a0+a1)/2; const lx = cx + (rx-geo.tw/2-12)*Math.cos(am), ly = cy + (ry-geo.th/2-12)*Math.sin(am);
+		const t = mk('text',{x:lx, y:ly, class:'rl '+status, 'text-anchor': Math.cos(am)>0.3?'end':Math.cos(am)<-0.3?'start':'middle', 'dominant-baseline':'middle'});
+		t.textContent = `${r.n} · ${r.label}`; d.appendChild(t);
+	});
+}
+function openRow(){ const g = PARTS.find(p=>p.gate && !state.placed.has(p.id)); return g ? g.row : 0; }
+function refreshTiles(){
+	document.querySelectorAll('.tile').forEach(t=>{
+		const p = byId[t.dataset.id]; if(!p) return;
+		t.classList.toggle('spent', state.placed.has(p.id));
+		t.classList.toggle('burned', state.burned.has(p.id));
+		t.classList.toggle('covered', !state.placed.has(p.id) && !!coveredBy(p));
+		t.classList.toggle('ready', ready(p));
+		t.classList.toggle('sel', state.sel===p.id);
+	});
+	const u = document.getElementById('undo'); if(u) u.disabled = past.length === 0;
+	renderDeck();
+	drawDial();
+}
+window.addEventListener('resize', layout);
+
+/* ============================================================
+   DRAG — to the house in the middle
+   ============================================================ */
+const ghost = document.getElementById('ghost');
+const housebox = document.getElementById('housebox');
+let drag = null;
+function startDrag(e){
+	if(e.button!==undefined && e.button!==0) return;
+	const t = e.currentTarget; const id = t.dataset.id;
+	drag = {id, x0:e.clientX, y0:e.clientY, moved:false, t};
+	t.setPointerCapture(e.pointerId);
+	t.addEventListener('pointermove', moveDrag);
+	t.addEventListener('pointerup', endDrag);
+	t.addEventListener('pointercancel', endDrag);
+}
+function moveDrag(e){
+	if(!drag) return;
+	if(!drag.moved && Math.hypot(e.clientX-drag.x0, e.clientY-drag.y0) > 6){
+		drag.moved = true; closePeek();
+		ghost.innerHTML=''; const c = tileNode(byId[drag.id], false); ghost.appendChild(c); ghost.style.display='block';
+		document.body.style.cursor='grabbing';
+	}
+	if(drag.moved){
+		ghost.style.left = (e.clientX - geo.tw/2)+'px'; ghost.style.top = (e.clientY - geo.th/2)+'px';
+		stage.classList.toggle('over', overHouse(e));
+	}
+}
+function overHouse(e){ const r = housebox.getBoundingClientRect(); const pad = 40; return e.clientX>=r.left-pad && e.clientX<=r.right+pad && e.clientY>=r.top-pad && e.clientY<=r.bottom+pad; }
+function endDrag(e){
+	if(!drag) return;
+	const d = drag; drag = null;
+	d.t.removeEventListener('pointermove', moveDrag); d.t.removeEventListener('pointerup', endDrag); d.t.removeEventListener('pointercancel', endDrag);
+	ghost.style.display='none'; stage.classList.remove('over'); document.body.style.cursor='';
+	if(!d.moved){ openPeek(d.id, {}); return; }           // a tap is "look", not "go"
+	if(overHouse(e)) attempt(d.id, e); else { state.sel=null; refreshTiles(); }
+}
+
+/* ============================================================
+   ENGINE — a partial order, ten gates, two traps
+   ============================================================ */
+function met(need){ return need.split('|').some(id=>state.placed.has(id)); }
+function coveredBy(p){ if(p.altOf && state.placed.has(p.altOf)) return byId[p.altOf]; return PARTS.find(q=>q.altOf===p.id && state.placed.has(q.id)) || null; }
+function ready(p){ return !state.placed.has(p.id) && !state.burned.has(p.id) && !coveredBy(p) && p.needs.every(met); }
+function missing(p){ return p.needs.filter(n=>!met(n)).map(n=>n.split('|').map(id=>byId[id].short).join(' or ')); }
+
+/* ---- REVERSE: one snapshot per step that changes the house ---- */
+const past = [];
+function snap(){ return {placed:new Set(state.placed), passed:new Set(state.passed), burned:new Set(state.burned),
+	failedRows:new Set(state.failedRows), leaks:state.leaks, fails:state.fails}; }
+function restore(s){ state.placed=new Set(s.placed); state.passed=new Set(s.passed); state.burned=new Set(s.burned);
+	state.failedRows=new Set(s.failedRows); state.leaks=s.leaks; state.fails=s.fails; }
+function rebuildStamps(){
+	const s = document.getElementById('stamps'); s.innerHTML='';
+	PARTS.filter(p=>p.gate).sort((a,b)=>a.row-b.row).forEach(p=>{
+		if(state.passed.has(p.row)) stampGate(p,'pass');
+		else if(state.failedRows.has(p.row)) stampGate(p,'fail');
+	});
+}
+function reverse(){
+	const e = past.pop(); if(!e) return;
+	const p = byId[e.id];
+	const failed = p.gate && state.failedRows.has(p.row);
+	restore(e.s);
+	document.getElementById('done').classList.remove('on');
+	closePeek(); state.sel = null;
+	rebuildStamps(); deckSeek(); redraw(); refreshTiles(); score();
+	if(p.gate) say('', failed
+		? `<b>Reversed.</b> The <b>${ROWS[p.row-1].label}</b> inspection is un-called and the tile is back. On a real job you do not get this button.`
+		: `<b>Reversed.</b> The <b>${ROWS[p.row-1].label}</b> inspection is un-called. In the field a stamp is a stamp.`);
+	else say('', `<b>Reversed.</b> <b>${p.short}</b> is back on the table. On a real job that step is a demo crew and a change order.`);
+}
+document.getElementById('undo').addEventListener('click', reverse);
+window.addEventListener('keydown', ev=>{ if((ev.ctrlKey||ev.metaKey) && ev.key.toLowerCase()==='z'){ ev.preventDefault(); reverse(); } });
+
+function attempt(id, e){
+	const p = byId[id];
+	if(state.placed.has(id)){ openPeek(id,{note:'Already on the house.'}); return; }
+	if(state.burned.has(id)){ openPeek(id,{}); return; }
+	const cov = coveredBy(p);
+	if(cov){ openPeek(id, {note:`Already covered by “${cov.name}”. Two ways to do one job — you only do one.`}); return; }
+	if(!p.needs.every(met)){
+		state.leaks++; leak(e); shakeTile(id);
+		const why = `Not yet. The house needs: ${missing(p).join(', ')}. ${p.gate? 'You are calling the inspector to look at something that is not there.' : 'You cannot cover what the inspector has not seen.'}`;
+		say('leak', `<b>Leak.</b> ${why}`); openPeek(id, {leak:why});
+		score(); return;
+	}
+	past.push({s:snap(), id});                 // from here on the house changes — remember how it looked
+	if(p.gate){
+		const burn = (p.failsIf||[]).filter(t=>state.placed.has(t));
+		if(burn.length){
+			state.fails++; state.failedRows.add(p.row);
+			burn.forEach(t=>{ state.placed.delete(t); state.burned.add(t); });
+			redraw(); stampGate(p, 'fail');
+			const t = byId[burn[0]];
+			const why = `${ROWS[p.row-1].label} inspection: FAIL. “${t.name}” comes out. ${t.fail}`;
+			say('fail', `<b>${ROWS[p.row-1].label}: FAIL.</b> “${t.short}” comes out. ${t.fail}`);
+			// a failed gate changes what is playable — the deck has to look again,
+			// or it strands you on a card that is no longer next
+			openPeek(t.id, {failGate:why}); deckSeek(); refreshTiles(); score(); return;
+		}
+		state.placed.add(id); state.passed.add(p.row); state.failedRows.delete(p.row); stampGate(p,'pass');
+		say('pass', `<b>${ROWS[p.row-1].label}: PASS.</b> ${ROWS[p.row-1].sees}`);
+		closePeek();
+		if(p.row===NG) finish();
+	} else {
+		state.placed.add(id);
+		say('', `<b>${p.short}</b> is on. ${p.law}`);
+		closePeek();
+	}
+	state.sel=null; applyShot(id); deckSeek(); redraw(); refreshTiles(); score();
+}
+function say(kind, html){ const m = document.getElementById('msg'); m.className = kind; m.innerHTML = html; }
+function shakeTile(id){ const t = document.querySelector(`.tile.big[data-id="${id}"]`) || stage.querySelector(`.tile[data-id="${id}"]`); if(!t) return; t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake'); }
+function stampGate(p, kind){
+	const s = document.getElementById('stamps');
+	let d = s.querySelector(`[data-row="${p.row}"]`);
+	if(!d){ d = el('div','stamp'); d.dataset.row = p.row; s.appendChild(d); }
+	d.className = 'stamp '+kind; d.title = `${ROWS[p.row-1].label} · ${kind==='pass'?'PASS':'FAIL'}`; d.setAttribute('aria-label', d.title);
+	d.innerHTML = `<span class="pic" style="display:block;width:22px;height:18px">${inspectorSVG(p.row, kind==='pass'?'#7fa07a':'#c46a4a')}</span>`;
+	[...s.children].sort((a,b)=>a.dataset.row-b.dataset.row).forEach(c=>s.appendChild(c));
+}
+function score(){ document.getElementById('score').innerHTML = `Gates <b>${state.passed.size}/${NG}</b> · Leaks <b>${state.leaks}</b> · Failed gates <b>${state.fails}</b>`; }
+function finish(){
+	const bad = state.leaks + state.fails;
+	const stars = bad===0?3: bad<=3?2:1;
+	document.getElementById('d-stars').textContent = '★'.repeat(stars)+'☆'.repeat(3-stars);
+	document.getElementById('d-title').textContent = ['Final signed. It cost you a jackhammer first.','Final signed. A couple of wet spots.','Final signed. Zero leaks. Three visits, no rework.'][stars-1];
+	document.getElementById('d-body').innerHTML = `Three visits and seven gates: <b>${state.leaks}</b> leak${state.leaks===1?'':'s'}, <b>${state.fails}</b> failed inspection${state.fails===1?'':'s'}. From the street this house looked finished at step 30. A sanitary tee on its back and six vents capped in an attic look exactly the same from there. The inspector is the only reason it is plumbing.`;
+	document.getElementById('done').classList.add('on');
+}
+function resetAll(){
+	state.placed.clear(); state.passed.clear(); state.burned.clear(); state.failedRows.clear(); state.leaks=0; state.fails=0; state.sel=null; past.length=0;
+	document.getElementById('stamps').innerHTML=''; document.getElementById('done').classList.remove('on'); closePeek(); deckIdx=0;
+	say('', '<b>40 cards, 7 steps.</b> Drag the top card onto the house. Drag the house to spin it, scroll to zoom.');
+	redraw(); refreshTiles(); score();
+}
+document.getElementById('reset').addEventListener('click', resetAll);
+document.getElementById('again').addEventListener('click', resetAll);
+
+/* ============================================================
+   THE PEEK — the card, anchored to the tile, opening inward
+   ============================================================ */
+const peek = document.getElementById('peek');
+let peekLeaveTimer;
+function openPeek(id, o){
+	const p = byId[id]; const f = famById[p.fam]; const r = ROWS[p.row-1];
+	state.sel = id; refreshTiles();
+	const burned = state.burned.has(id);
+	const hideTrap = p.trap && !burned;
+	const g = hideTrap ? GRADES['1'] : GRADES[p.grade]; const gk = hideTrap ? '1' : p.grade;
+	const blocks = [];
+	if(o.leak) blocks.push(`<div class="blk fail"><h3>Leak</h3><p>${o.leak}</p></div>`);
+	if(o.failGate) blocks.push(`<div class="blk fail"><h3>Failed</h3><p>${o.failGate}</p></div>`);
+	if(o.note) blocks.push(`<div class="blk"><h3>Note</h3><p>${o.note}</p></div>`);
+	blocks.push(`<div class="blk spec"><h3>What you do</h3><p>${p.spec}</p></div>`);
+	blocks.push(`<div class="blk fail"><h3>Fails when</h3><p>${p.fail}</p></div>`);
+	const can = !state.placed.has(id) && !burned;
+	document.getElementById('peekbody').innerHTML = `
+		<div class="bar" style="background:${f.hueTo}"></div>
+		<p class="kick">${p.gate?'Gate':(burned?'Cartoon':'Part')} · ${f.label} · ${r.n} ${r.label}${p.gate?' · '+r.code:''}</p>
+		${p.icon ? `<span class="pic">${p.icon==='inspector'?inspectorSVG(p.row,f.hueTo):permitSVG(f.hueTo)}</span>` : `<p class="sym" style="color:${f.hueTo}">${p.sym}</p>`}
+		<h2>${p.name}</h2>
+		<p class="meta">z ${p.z}${p.altOf?` · pairs with ${byId[p.altOf].short}`:''}${state.placed.has(id)?' · on the house':''}</p>
+		<p class="law">${p.law}</p>
+		${blocks.join('')}
+		<span class="grade g${gk}"><b>${g[0]}</b>${g[1]}</span>
+		<p class="src">${hideTrap ? 'Looks like every other tile in its family. That is the point.' : g[2]+' Source: '+p.src}</p>
+		${can ? `<button class="eat" id="peekgo">${p.gate?'Call the inspection':'Put it on the house'}</button>` : ''}`;
+	const go = document.getElementById('peekgo'); if(go) go.addEventListener('click', ()=>attempt(id));
+	peek.classList.add('on');
+	placePeek(id);
+}
+function placePeek(id){
+	const t = document.querySelector(`.tile.big[data-id="${id}"]`) || stage.querySelector(`.tile[data-id="${id}"]`);
+	// In deck mode the ring tiles are still in the DOM but parked off to the side,
+	// so anchoring to one put this panel straight on top of the next card — you
+	// failed a gate and then could not pick up the card that fixes it.
+	const anchor = (state.mode === 'deck')
+		? (document.querySelector('#dcard .tile.big') || deckBox)
+		: t;
+	if(!anchor){ peek.style.left='50%'; peek.style.top='90px'; return; }
+	const tr = anchor.getBoundingClientRect();
+	const pw = peek.offsetWidth, ph = peek.offsetHeight;
+	const tcx = tr.left + tr.width/2, tcy = tr.top + tr.height/2;
+	const W = window.innerWidth, H = window.innerHeight;
+	let left, top;
+	if(Math.abs(tcx - W/2) > W*0.18){ left = tcx < W/2 ? tr.right + 10 : tr.left - 10 - pw; top = tcy - ph/2; }
+	else { top = tcy < H/2 ? tr.bottom + 10 : tr.top - 10 - ph; left = tcx - pw/2; }
+	left = Math.max(8, Math.min(W - pw - 8, left)); top = Math.max(8, Math.min(H - ph - 8, top));
+	// never sit on the deck — the next card has to stay grabbable
+	if(state.mode === 'deck' && deckBox){
+		const d = deckBox.getBoundingClientRect();
+		const hits = !(left+pw < d.left || left > d.right || top+ph < d.top || top > d.bottom);
+		if(hits){ if(d.right + 10 + pw <= W - 8) left = d.right + 10;
+			else if(d.top - 10 - ph >= 8) top = d.top - 10 - ph;
+			else { top = 8; left = Math.max(8, Math.min(W - pw - 8, left)); } }
+	}
+	if(left < 260 && top < 84) top = 84;   // keep the view toggle uncovered
+	peek.style.left = left+'px'; peek.style.top = top+'px';
+}
+function closePeek(){ peek.classList.remove('on'); }
+document.getElementById('peekclose').addEventListener('click', closePeek);
+peek.addEventListener('pointerenter', ()=>clearTimeout(peekLeaveTimer));
+stage.addEventListener('pointerover', e=>{
+	if(!window.matchMedia('(hover:hover)').matches) return;
+	if(e.target.closest('.tile') || e.target.closest('#peek')) { clearTimeout(peekLeaveTimer); return; }
+	clearTimeout(peekLeaveTimer); peekLeaveTimer = setTimeout(()=>{ if(!peek.matches(':hover')) closePeek(); }, 500);
+});
+window.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closePeek(); document.getElementById('chart').classList.remove('on'); } });
+
+/* ============================================================
+   THE CHART — the table itself, read-only, one click away
+   ============================================================ */
+function buildTable(){
+	const grid = document.getElementById('table'); grid.innerHTML = '';
+	const cols = ['2.1rem']; const slots = [];
+	FAMS.forEach((f,i)=>{ if(i>0 && FAMS[i-1].block!==f.block){ slots.push({gutter:true}); cols.push('0.55rem'); } slots.push({fam:f}); cols.push('minmax(3.6rem,1fr)'); });
+	grid.style.gridTemplateColumns = cols.join(' ');
+	grid.appendChild(el('div'));
+	slots.forEach(s=>{ if(s.gutter){ grid.appendChild(el('div')); return; } const h = el('div','fam'); h.title = s.fam.q; h.innerHTML = `<b style="color:${s.fam.hueTo}">${s.fam.sym}</b><span>${s.fam.label}</span>`; grid.appendChild(h); });
+	ROWS.forEach(r=>{
+		const seats = {}; FAMS.forEach(f=>{ seats[f.id] = PARTS.filter(p=>p.fam===f.id && p.row===r.n).sort((a,b)=>a.z-b.z || (a.trap?1:-1)); });
+		const height = Math.max(1, ...Object.values(seats).map(a=>a.length));
+		const lab = el('div','rowlab'); lab.style.gridRow = `span ${height}`; lab.title = r.sees; lab.innerHTML = `<span>${r.n} · ${r.label}</span>`; grid.appendChild(lab);
+		for(let seat=0; seat<height; seat++) slots.forEach(s=>{ if(s.gutter){ grid.appendChild(el('div')); return; } const p = seats[s.fam.id][seat]; grid.appendChild(p ? tileNode(p,false) : el('div')); });
+	});
+	document.getElementById('legend').innerHTML = FAMS.map(f=>`<span><i style="background:${fill(f.hue,f.hueTo)}"></i>${f.label} — ${f.q}</span>`).join('');
+}
+document.getElementById('showchart').addEventListener('click', ()=>{ buildTable(); refreshTiles(); document.getElementById('chart').classList.add('on'); });
+document.getElementById('chartclose').addEventListener('click', ()=>document.getElementById('chart').classList.remove('on'));
+document.getElementById('chart').addEventListener('click', e=>{ if(e.target.id==='chart') e.currentTarget.classList.remove('on'); });
+
+/* ============================================================
+   THE SCENE — a real 3D model. One unit = one foot.
+   Every part draws into a named layer group; the same `placed`
+   set that drives the ring drives what is visible.
+   Cutaway = a clipping plane through the middle of the house.
+   ============================================================ */
+const W2 = 20, D2 = 14, T = 0.67;          // half-width, half-depth, block thickness
+const SLAB = 1, WALLTOP = 9.5, BEAMTOP = 11, BC = 11.5;
+const RIDGE = 16.167, EAVEZ = 16, EAVEY = 10.833, GX = 22;
+const PITCH = Math.atan2(RIDGE - EAVEY, EAVEZ);
+const SLOPE = Math.hypot(EAVEZ, RIDGE - EAVEY);
+const IN = D2 - T;                          // inner face of the block, z
+const INX = W2 - T;                         // inner face of the block, x
+
+/* the four exterior walls, with their openings. One list, many shells. */
+const HOLES_F = [[-3,0,SLAB,8],[6,12,4,7.5]];        // front (+z): door + kitchen window
+const HOLES_B = [[-12,-6,4,7.5],[6,12,4,7.5]];       // back (-z): two bath windows
+const HOLES_L = [[-4,2,4,7.5]];                      // left (-x)
+const HOLES_R = [[-2,4,4,7.5]];                      // right (+x)
+function walls(inset){                                // inset > 0 = inward shell
+	const z = D2 - T/2 - inset, x = W2 - T/2 - inset, e = D2 - T - inset;
+	return [
+		{d:'x', at: z, a:-W2, b:W2, holes:HOLES_F},
+		{d:'x', at:-z, a:-W2, b:W2, holes:HOLES_B},
+		{d:'z', at:-x, a:-e,  b:e,  holes:HOLES_L},
+		{d:'z', at: x, a:-e,  b:e,  holes:HOLES_R},
+	];
+}
+/* an opening is a hole: split the wall into the rectangles that are left */
+function segs(a, b, y0, y1, holes){
+	const hs = (holes||[]).slice().sort((p,q)=>p[0]-q[0]); const out=[]; let x=a;
+	for(const h of hs){
+		if(h[0] > x) out.push([x, h[0], y0, y1]);
+		if(h[2] > y0) out.push([h[0], h[1], y0, h[2]]);
+		if(h[3] < y1) out.push([h[0], h[1], h[3], y1]);
+		x = Math.max(x, h[1]);
+	}
+	if(x < b) out.push([x, b, y0, y1]);
+	return out.filter(s=>s[1]-s[0] > .01 && s[3]-s[2] > .01);
+}
+
+/* ---------- renderer, scene, camera ---------- */
+let renderer, scene, camera, root, clip, raf = null, dirty = true;
+const LG = {}, MATS = {};
+let CUR = null;
+const cam = {az:0.34, el:0.26, r:60, tx:0, ty:6.4, tz:0, anim:null};
+const holder = document.getElementById('housebox');
+
+function mat(o){
+	const m = new THREE.MeshLambertMaterial(Object.assign({side:THREE.DoubleSide}, o));
+	m.userData = {op:(o&&o.opacity!==undefined)?o.opacity:1, tr:!!(o&&o.transparent), site:false};
+	(MATS[CUR] = MATS[CUR] || []).push(m);
+	return m;
+}
+function siteMat(o){ const m = mat(o); m.userData.site = true; return m; }
+function clipAll(){ /* the plumbing model x-rays the shell instead of cutting it */ }
+
+function box(w,h,d,x,y,z,m,g,rx){ const n=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), m); n.position.set(x,y,z); if(rx) n.rotation.x=rx; g.add(n); return n; }
+function cylY(r,h,x,y,z,m,g){ const n=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,12), m); n.position.set(x,y,z); g.add(n); return n; }
+function cylX(r,h,x,y,z,m,g){ const n=cylY(r,h,x,y,z,m,g); n.rotation.z=Math.PI/2; return n; }
+function cylZ(r,h,x,y,z,m,g){ const n=cylY(r,h,x,y,z,m,g); n.rotation.x=Math.PI/2; return n; }
+function strut(x, z1,y1, z2,y2, w, m, g){
+	const dz = z2-z1, dy = y2-y1, len = Math.hypot(dz,dy);
+	const n = box(w, w, len, x, (y1+y2)/2, (z1+z2)/2, m, g);
+	n.rotation.x = -Math.atan2(dy, dz); return n;
+}
+/* ⭐ the one helper this whole model is built on: a pipe from point A to point B,
+   at any angle, so a 1/8 in. per foot fall is a thing you can actually see. */
+let UP = null;                               // built on first use — the page must still load without WebGL
+function pipe(a, b, r, m, g){
+	UP = UP || new THREE.Vector3(0,1,0);
+	const d = new THREE.Vector3(b[0]-a[0], b[1]-a[1], b[2]-a[2]);
+	const len = d.length(); if(len < 1e-4) return null;
+	const n = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 12), m);
+	n.position.set((a[0]+b[0])/2, (a[1]+b[1])/2, (a[2]+b[2])/2);
+	n.quaternion.setFromUnitVectors(UP, d.clone().normalize());
+	g.add(n); return n;
+}
+function hub(p, r, m, g){ const n=new THREE.Mesh(new THREE.SphereGeometry(r,12,9), m); n.position.set(p[0],p[1],p[2]); g.add(n); return n; }
+function run(pts, r, m, g){ for(let i=1;i<pts.length;i++){ pipe(pts[i-1], pts[i], r, m, g); hub(pts[i-1], r*1.06, m, g); } hub(pts[pts.length-1], r*1.06, m, g); }
+const TCY = z => (RIDGE - .30) - Math.abs(z)/3;      // the top chord line
+function build(name, fn){ const g=new THREE.Group(); g.visible=false; root.add(g); LG[name]=g; CUR=name; fn(g); CUR=null; }
+
+/* ---------- canvas textures (no external files) ---------- */
+function makeTex(draw, size){
+	const c=document.createElement('canvas'); c.width=c.height=size||128;
+	draw(c.getContext('2d'), c.width);
+	const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
+}
+const TX = {};
+function textures(){
+	TX.block = makeTex((c,s)=>{ c.fillStyle='#8f8d88'; c.fillRect(0,0,s,s); c.strokeStyle='#6f6d68'; c.lineWidth=3;
+		c.beginPath(); c.moveTo(0,s-1.5); c.lineTo(s,s-1.5); c.moveTo(s/2,0); c.lineTo(s/2,s); c.stroke();
+		c.fillStyle='rgba(255,255,255,.05)'; for(let i=0;i<200;i++) c.fillRect(Math.random()*s,Math.random()*s,2,2); });
+	TX.stucco = makeTex((c,s)=>{ c.fillStyle='#ddd2bb'; c.fillRect(0,0,s,s);
+		for(let i=0;i<900;i++){ c.fillStyle=Math.random()>.5?'rgba(0,0,0,.05)':'rgba(255,255,255,.08)'; c.fillRect(Math.random()*s,Math.random()*s,2,2);} });
+	TX.shingle = makeTex((c,s)=>{ c.fillStyle='#4f4a48'; c.fillRect(0,0,s,s);
+		c.fillStyle='#443f3d'; c.fillRect(0,s/2,s,s/2); c.strokeStyle='#2c2827'; c.lineWidth=4;
+		c.beginPath(); c.moveTo(0,s-2); c.lineTo(s,s-2); c.moveTo(0,s/2); c.lineTo(s,s/2); c.moveTo(s/2,s/2); c.lineTo(s/2,s); c.stroke(); });
+	TX.ply = makeTex((c,s)=>{ c.fillStyle='#d3ad74'; c.fillRect(0,0,s,s); c.strokeStyle='#b08a55'; c.lineWidth=2;
+		for(let i=0;i<9;i++){ c.beginPath(); c.moveTo(0,i*s/8+Math.sin(i)*3); c.bezierCurveTo(s/3,i*s/8+6,2*s/3,i*s/8-6,s,i*s/8); c.stroke(); } });
+	TX.board = makeTex((c,s)=>{ c.fillStyle='#e6e1d6'; c.fillRect(0,0,s,s); c.strokeStyle='#cfc9bc'; c.lineWidth=2;
+		c.strokeRect(1,1,s-2,s-2); });
+	TX.tile = makeTex((c,s)=>{ c.fillStyle='#d9d2c4'; c.fillRect(0,0,s,s); c.strokeStyle='#c2b9a7'; c.lineWidth=4; c.strokeRect(0,0,s,s); });
+	TX.sod = makeTex((c,s)=>{ c.fillStyle='#3f6b33'; c.fillRect(0,0,s,s);
+		for(let i=0;i<600;i++){ c.fillStyle=Math.random()>.5?'#4f7d3e':'#365c2c'; c.fillRect(Math.random()*s,Math.random()*s,3,3);} });
+	TX.soil = makeTex((c,s)=>{ c.fillStyle='#2e241b'; c.fillRect(0,0,s,s);
+		for(let i=0;i<700;i++){ c.fillStyle=Math.random()>.5?'#3a2d22':'#241c15'; c.fillRect(Math.random()*s,Math.random()*s,4,4);} });
+}
+function texMat(t, w, h, tileW, tileH, extra){
+	const tt = t.clone(); tt.needsUpdate = true;
+	tt.wrapS = tt.wrapT = THREE.RepeatWrapping;
+	tt.repeat.set(Math.max(.4, w/tileW), Math.max(.4, h/tileH));
+	return mat(Object.assign({map:tt}, extra||{}));
+}
+function shellW(list, y0, y1, th, tex, tileW, tileH, g, extra){
+	list.forEach(w=>{
+		segs(w.a, w.b, y0, y1, w.holes).forEach(s=>{
+			const len = s[1]-s[0], hgt = s[3]-s[2];
+			const m = tex ? texMat(tex, len, hgt, tileW, tileH, extra) : mat(extra);
+			if(w.d==='x') box(len, hgt, th, (s[0]+s[1])/2, (s[2]+s[3])/2, w.at, m, g);
+			else          box(th, hgt, len, w.at, (s[2]+s[3])/2, (s[0]+s[1])/2, m, g);
+		});
+	});
+}
+function roof(thick, lift, m, g, x0, x1){
+	x0 = x0===undefined ? -GX : x0; x1 = x1===undefined ? GX : x1;
+	[1,-1].forEach(s=>{
+		const n = box(x1-x0, thick, SLOPE, (x0+x1)/2, (EAVEY+RIDGE)/2 + lift, s*EAVEZ/2, m, g);
+		n.rotation.x = s*PITCH;
+	});
+}
+function roofTex(t, tileW, tileH, extra){ return texMat(t, GX*2, SLOPE, tileW, tileH, extra); }
+/* the height of the roof plane over a point, so a vent can stand 6 in. above it */
+const ROOFY = z => EAVEY + (EAVEZ - Math.abs(z)) * (RIDGE - EAVEY) / EAVEZ;
+
+/* the little man with the magnifying glass */
+function numTex(n){ return makeTex((c,s)=>{ c.clearRect(0,0,s,s);
+	c.beginPath(); c.arc(s/2, s/2, s*0.40, 0, 7); c.fillStyle='rgba(10,12,18,.90)'; c.fill();
+	c.lineWidth = s*0.065; c.strokeStyle='#d4a24c'; c.stroke();
+	c.fillStyle='#f4ecd8'; c.font='bold '+(s*0.46)+'px Iowan Old Style,Palatino,Georgia,serif';
+	c.textAlign='center'; c.textBaseline='middle'; c.fillText(String(n), s/2, s/2 + s*0.03); }, 128); }
+function person(n, g){
+	const skin = mat({color:'#e8dcc8'}), coat = mat({color:'#cfd6dd'});
+	const p = new THREE.Group();
+	const body = new THREE.Mesh(new THREE.CylinderGeometry(.75,.95,3.4,10), coat); body.position.y=1.7; p.add(body);
+	const head = new THREE.Mesh(new THREE.SphereGeometry(.62,12,10), skin); head.position.y=3.9; p.add(head);
+	const arm = new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,1.7,8), coat); arm.position.set(1.0,2.6,.5); arm.rotation.z=-.9; p.add(arm);
+	const ring = new THREE.Mesh(new THREE.TorusGeometry(.62,.13,8,18), mat({color:'#d4a24c'})); ring.position.set(1.9,3.1,.6); p.add(ring);
+	const lens = new THREE.Mesh(new THREE.CircleGeometry(.6,18), mat({color:'#9fc4e8', transparent:true, opacity:.45})); lens.position.copy(ring.position); p.add(lens);
+	const spr = new THREE.Sprite(new THREE.SpriteMaterial({map:numTex(n), transparent:true, depthTest:false}));
+	spr.scale.set(4.2,4.2,1); spr.position.set(0, 6.6 + (n%3)*1.9, 0); p.add(spr);
+	MATS[CUR].push(spr.material); spr.material.userData={op:1,tr:true,site:true};
+	g.add(p); return p;
+}
+
+/* ============================================================
+   THE PLAN — data, not code paths. Move a fixture here and the
+   drain, the stub, the trap arm, the vent and the trim all move.
+   ============================================================ */
+const PARTS_W = [
+	{d:'x', at:-5,  a:-W2+T, b:13},          // the wet wall, across the back
+	{d:'z', at:-6,  a:-D2+T, b:-5},          // master bath / hall
+	{d:'z', at:1,   a:-D2+T, b:-5},          // hall / hall bath
+	{d:'z', at:13,  a:-D2+T, b:-5},          // hall bath far side
+	{d:'x', at:5,   a:-W2+T, b:-2},          // laundry & water heater
+	{d:'z', at:-2,  a:-5, b:5},              // spine
+	{d:'z', at:6,   a:5, b:D2-T},            // kitchen
+];
+/* the drain tree, node by node. [x, y, z] — y is the fall you can see. */
+const ND = {
+	bl :[-17.5,-0.95,-6.4], tub:[-16.0,-0.99,-6.4], wc1:[-11.0,-1.10,-6.4],
+	lv1:[ -7.6,-1.18,-6.4], j1 :[ -2.0,-1.30,-6.4], lv2:[  0.0,-1.26,-6.4],
+	wc2:[  3.2,-1.19,-6.4], sh :[  8.5,-1.05,-6.4], br :[  9.8,-1.02,-6.4],
+	tubD:[-16.0,-0.90,-10.0], shD:[8.5,-0.96,-10.0],
+	j2 :[ -2.0,-1.62, 6.5], j3 :[ -2.0,-1.75,11.6], out:[-2.0,-1.82,14.0],
+	wshB:[-18.2,-1.30, 6.5], ksB:[9.0,-1.52,11.6], kend:[12.5,-1.45,11.6],
+	co :[ -2.0,-2.90,26.0], tap:[-2.0,-3.90,36.0],
+};
+const R4 = .46, R3 = .34, R2 = .25;          // 4 in., 3 in., 2 in. — exaggerated so they read
+/* every stub-up: the node it rises from, its size, and what sits on it */
+const STUBS = [
+	{n:'wc1', r:R3, k:'wc'},  {n:'lv1', r:R2, k:'lav'}, {n:'tubD', r:R2, k:'tub'},
+	{n:'wc2', r:R3, k:'wc'},  {n:'lv2', r:R2, k:'lav'}, {n:'shD', r:R2, k:'sh'},
+	{n:'ksB', r:R2, k:'ks'},  {n:'wshB', r:R2, k:'wsh'},
+];
+const TOP = SLAB + 0.55;                     // where a capped stub stands
+/* the two vents that go out through the roof, and the fixtures each gathers */
+const VENTS = [{x:-6.0, z:-3.0}, {x:7.0, z:-3.0}];
+const WHP = [-17.0, 9.6];                    // the water heater
+const METER = [14.0, 26.0];                  // the water meter box at the line
+const GASM = [W2 + 1.0, -6.0];               // the gas meter, on the right wall
+
+/* ============================================================
+   THE LAYERS — one builder per layer, in the order they go in
+   ============================================================ */
+function buildAll(){
+	/* ---- the site, always there ---- */
+	const site = new THREE.Group(); root.add(site); CUR='site';
+	box(200, .22, 11, 0, .11, 42, mat({color:'#5b5854'}), site);              // the street
+	MATS.site.forEach(m=>m.userData.site = true);
+	// ⭐ The ground is its own material group so X-ray can take it to glass.
+	// Three of the seven steps happen under the slab; behind an opaque lawn you
+	// cannot see any of them, which makes the first half of the model useless.
+	CUR = 'pad';
+	const sod = new THREE.Mesh(new THREE.PlaneGeometry(300,300), texMat(TX.sod, 300,300, 6,6));
+	sod.rotation.x = -Math.PI/2; sod.position.y = -0.06; site.add(sod);
+	const soil = new THREE.Mesh(new THREE.PlaneGeometry(78, 84), texMat(TX.soil, 78,84, 8,8));
+	soil.rotation.x = -Math.PI/2; soil.position.set(0, -0.02, 3); site.add(soil);   // the working pad
+	box(78, 7.0, 84, 0, -3.55, 3, mat({color:'#241c15'}), site);              // what you are digging in
+	MATS.pad.forEach(m=>m.userData.site = true);
+	CUR = null;
+
+	build('permit', g=>{                                     // the job sign goes up with the permit
+		const W = 640, H = 400;
+		const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+		const c = cv.getContext('2d');
+		const fit = (txt, size, maxW, y, font, colour, track)=>{      // shrink until it fits the board
+			let px = size;
+			for(;;){ c.font = font.replace('@', px); c.letterSpacing = track + 'px';
+				if(c.measureText(txt).width <= maxW || px < 8) break; px -= 1; }
+			c.fillStyle = colour; c.textAlign = 'center'; c.fillText(txt, W/2, y); c.letterSpacing = '0px';
+		};
+		c.fillStyle = '#12182B'; c.fillRect(0,0,W,H);
+		c.strokeStyle = '#c4a574'; c.lineWidth = 5; c.strokeRect(14,14,W-28,H-28);
+		c.save(); c.translate(W/2 - 27, 46); c.scale(.37,.37);         // the crown, traced from the logo
+		c.beginPath(); c.moveTo(11,116); c.lineTo(2,55); c.lineTo(45,66); c.lineTo(73,3);
+		c.lineTo(101,66); c.lineTo(145,55); c.lineTo(136,116); c.closePath();
+		c.lineWidth = 15; c.lineJoin = 'miter'; c.strokeStyle = '#c4a574'; c.stroke(); c.restore();
+		c.strokeStyle = '#c4a574'; c.lineWidth = 3;
+		c.beginPath(); c.moveTo(64,74); c.lineTo(W/2-46,74); c.moveTo(W/2+46,74); c.lineTo(W-64,74); c.stroke();
+		fit('COVENANT BUILDERS', 54, W-90, 186, '600 @px Iowan Old Style, Palatino, Georgia, serif', '#e9e7e2', 8);
+		fit('WE DELIVER', 26, W-190, 232, '500 @px Helvetica, Arial, sans-serif', '#c4a574', 13);
+		c.strokeStyle = 'rgba(175,157,128,.45)'; c.lineWidth = 2;
+		c.beginPath(); c.moveTo(W/2-120,268); c.lineTo(W/2+120,268); c.stroke();
+		fit('CBC1253676  ·  (772) 473-7115', 25, W-120, 312, '500 @px Helvetica, Arial, sans-serif', '#9b9284', 1);
+		fit('Vero Beach · Sebastian · Fort Pierce · Port St. Lucie', 19, W-90, 348, '400 @px Helvetica, Arial, sans-serif', '#6e6960', 1);
+		const face = new THREE.CanvasTexture(cv);
+		const blank = siteMat({color:'#0d1220'}), signm = siteMat({map:face});
+		const SW = 9, SH = SW*H/W, YAW = -0.34;
+		const board = new THREE.Mesh(new THREE.BoxGeometry(SW,SH,.3), [blank,blank,blank,blank,signm,blank]);
+		board.position.set(-26, 7.4, 20); board.rotation.y = YAW; g.add(board);
+		const ax = Math.cos(YAW), az = -Math.sin(YAW);
+		const bx = Math.sin(YAW), bz = Math.cos(YAW);
+		const post = siteMat({color:'#6f6a62'});
+		[-3.3, 3.3].forEach(o=>cylY(.2, 11, -26 + ax*o - bx*0.5, 5.5, 20 + az*o - bz*0.5, post, g));
+		MATS.permit.forEach(m=>m.userData.site = true);
+	});
+
+	/* ---- step 1 ---- */
+	build('layout', g=>{
+		const chalk = mat({color:'#cfc7b5'}), mark = mat({color:'#e08a3c'}), flag = mat({color:'#e06fa3'});
+		PARTS_W.forEach(w=>{ const len=w.b-w.a, c=(w.a+w.b)/2;
+			if(w.d==='z') box(.42,.04,len,w.at,.06,c,chalk,g); else box(len,.04,.42,c,.06,w.at,chalk,g); });
+		// plain strips, not shellW — shellW splits a wall around its door and window
+		// openings, and at 3/4 in. tall that turns every opening into a 1 ft. panel
+		[[0, D2-T/2],[0,-(D2-T/2)]].forEach(([x,z])=>box(W2*2, .05, .42, x, .07, z, chalk, g));
+		[[W2-T/2,0],[-(W2-T/2),0]].forEach(([x,z])=>box(.42, .05, (D2-T)*2, x, .07, z, chalk, g));
+		STUBS.forEach(s=>{ const p = ND[s.n]; cylY(.55,.08,p[0],.10,p[2],mark,g); });
+		[[-W2-5,-D2-5],[W2+5,-D2-5],[-W2-5,D2+5],[W2+5,D2+5]].forEach(([x,z])=>{
+			cylY(.09,4,x,2,z,mat({color:'#d8d0c2'}),g); box(1.4,.7,.05,x+.7,3.7,z,flag,g); });
+	});
+
+	build('tapin', g=>{
+		const pvc = siteMat({color:'#cfc7b5'}), cap = siteMat({color:'#c46a4a'});
+		const dirt = siteMat({color:'#171009', transparent:true, opacity:.5});
+		box(5, 3.6, 26, ND.co[0], -1.9, 25, dirt, g);                       // the lateral trench
+		cylX(.9, 110, 0, -4.4, ND.tap[2], siteMat({color:'#8d8b86'}), g);   // the main under the street
+		run([ND.tap, ND.co, ND.out], R4, pvc, g);                           // the lateral, falling to the tap
+		cylY(R4+.06, Math.abs(ND.co[1]) + .35, ND.co[0], (ND.co[1]+.2)/2, ND.co[2], pvc, g);  // the cleanout riser
+		cylY(R4+.16, .35, ND.co[0], .26, ND.co[2], cap, g);                 // the cap, at grade
+	});
+
+	/* ---- step 2 ---- */
+	build('bdrain', g=>{
+		const pvc = mat({color:'#cfc7b5'});
+		const dirt = mat({color:'#171009', transparent:true, opacity:.45});
+		box(W2*2-2, 1.9, 3.2, -4, -1.0, -6.4, dirt, g);                     // the trenches
+		box(3.2, 2.0, D2*2-4, ND.j1[0], -1.1, 4, dirt, g);
+		run([ND.bl, ND.tub, ND.wc1, ND.lv1, ND.j1], R3, pvc, g);            // back branch, both ways to the main
+		run([ND.br, ND.sh, ND.wc2, ND.lv2, ND.j1], R3, pvc, g);
+		run([ND.tubD, ND.tub], R2, pvc, g);                                 // the tub and the shower spurs
+		run([ND.shD, ND.sh], R2, pvc, g);
+		run([ND.j1, ND.j2, ND.j3, ND.out], R4, pvc, g);                     // the main, falling to the front
+		run([ND.wshB, ND.j2], R2, pvc, g);                                  // laundry
+		run([ND.kend, ND.ksB, ND.j3], R2, pvc, g);                          // kitchen
+	});
+
+	build('branch', g=>{                                     // a wye and an eighth bend: the flow turns downstream
+		const swept = mat({color:'#dcd6c8'});
+		STUBS.forEach(s=>{ const p = ND[s.n];
+			pipe(p, [p[0], p[1]+.95, p[2]+0.95], s.r, swept, g);            // the 45° throat, pointing downstream
+			hub(p, s.r*1.5, swept, g); });
+		[ND.j1, ND.j2, ND.j3].forEach(p=>hub(p, R4*1.5, swept, g));
+	});
+	build('santee', g=>{                                     // the lie: a tee on its back. Same stubs, wrong throat.
+		const flat = mat({color:'#d8d2c4'});
+		STUBS.forEach(s=>{ const p = ND[s.n];
+			box(s.r*3.4, s.r*2.2, s.r*3.4, p[0], p[1]+.45, p[2], flat, g);  // a square shoulder, square entry
+			pipe(p, [p[0], p[1]+.95, p[2]], s.r, flat, g); });
+		[ND.j1, ND.j2, ND.j3].forEach(p=>hub(p, R4*1.5, flat, g));
+	});
+
+	build('stubs', g=>{
+		const pvc = mat({color:'#cfc7b5'}), cap = mat({color:'#c46a4a'});
+		STUBS.forEach(s=>{ const p = ND[s.n];
+			cylY(s.r, TOP - p[1], p[0], (p[1]+TOP)/2, p[2], pvc, g);
+			cylY(s.r+.07, .3, p[0], TOP + .12, p[2], cap, g); });
+	});
+
+	build('utest', g=>{
+		const pvc = mat({color:'#cfc7b5'});
+		const water = mat({color:'#4f86c6', transparent:true, opacity:.55});
+		const H = 10.6;                                                      // a ten-foot head on the lowest joint
+		cylY(R3, H, ND.j1[0]-1.2, ND.j1[1] + H/2, ND.j1[2], pvc, g);
+		cylY(R3-.05, H-.5, ND.j1[0]-1.2, ND.j1[1] + H/2, ND.j1[2], water, g);
+		[[ND.bl,ND.j1,R3],[ND.br,ND.j1,R3],[ND.j1,ND.out,R4],[ND.wshB,ND.j2,R2],[ND.kend,ND.j3,R2]]
+			.forEach(([a,b,r])=>pipe(a,b,r-.05,water,g));
+		STUBS.forEach(s=>{ const p=ND[s.n]; cylY(s.r-.05, TOP-p[1]-.4, p[0], (p[1]+TOP)/2, p[2], water, g); });
+	});
+
+	/* ---- step 3 ---- */
+	build('protect', g=>{
+		const sleeve = mat({color:'#c9c3b5', transparent:true, opacity:.6});
+		const stake = mat({color:'#8b6b4d'}), flag = mat({color:'#e08a3c'});
+		STUBS.forEach(s=>{ const p = ND[s.n];
+			cylY(s.r+.22, 1.9, p[0], .35, p[2], sleeve, g);
+			box(.16, 2.4, .16, p[0]+s.r+.5, 1.2, p[2], stake, g);
+			box(.1, .55, .6, p[0], TOP + .55, p[2], flag, g); });
+	});
+
+	/* ---- step 4 ---- */
+	build('shell', g=>{
+		box(W2*2, 1, D2*2, 0, .5, 0, texMat(TX.stucco, 40,28, 14,14, {color:'#b9b5ad'}), g);
+		shellW(walls(0), SLAB, WALLTOP, T, TX.block, 1.33, .67, g);
+		shellW(walls(0), WALLTOP, BEAMTOP, T, TX.stucco, 8, 8, g, {color:'#a8a49c'});
+		const pre = mat({color:'#9d9b96'});
+		[[HOLES_F, D2-T/2],[HOLES_B, -(D2-T/2)]].forEach(([hs,at])=>hs.forEach(h=>
+			box(h[1]-h[0]+1.4, .8, T+.05, (h[0]+h[1])/2, h[3]+.4, at, pre, g)));
+	});
+
+	build('wservice', g=>{
+		const cold = siteMat({color:'#6f92b8'});
+		const dirt = siteMat({color:'#171009', transparent:true, opacity:.5});
+		const bx = siteMat({color:'#9aa0a6'}), tape = siteMat({color:'#4f86c6'}), wire = siteMat({color:'#c9a83a'});
+		box(3.4, 2.4, METER[1] - 12, METER[0], -1.2, (METER[1]+12)/2, dirt, g);
+		box(2.6, 1.3, 3.4, METER[0], .55, METER[1], bx, g);                  // the meter box at the line
+		box(2.2, .12, 3.0, METER[0], 1.24, METER[1], siteMat({color:'#d8d0c2'}), g);
+		run([[METER[0],-1.55,METER[1]-1.6],[METER[0],-1.62,13.0]], .18, cold, g);
+		box(.9, .02, METER[1]-14, METER[0], -0.7, (METER[1]+13)/2, tape, g); // warning tape over it
+		cylZ(.05, METER[1]-14, METER[0]+.5, -1.45, (METER[1]+13)/2, wire, g);// the tracer wire
+		const in2 = mat({color:'#6f92b8'});
+		cylY(.18, 4.4, METER[0], SLAB + 1.4, 12.6, in2, g);                  // up through the slab
+		box(.5,.5,.5, METER[0], SLAB + 3.5, 12.6, mat({color:'#b9c0c7'}), g);// the main shutoff
+	});
+
+	/* ---- step 5 ---- */
+	build('shell2', g=>{
+		const wood = mat({color:'#c9a26b'}), web = mat({color:'#b08a55'});
+		for(let x=-W2; x<=W2; x+=4){
+			box(.3,.5,D2*2+1, x, BC-.25, 0, wood, g);
+			[1,-1].forEach(s=>{ strut(x, s*EAVEZ, TCY(EAVEZ), 0, TCY(0), .34, wood, g);
+				strut(x, s*9.3, BC, s*4.7, TCY(4.7), .26, web, g); });
+			strut(x, 0, BC, 0, TCY(0)-.2, .28, web, g);
+		}
+		roof(.30, .38, roofTex(TX.ply, 8, 4), g);
+		roof(.12, .60, roofTex(TX.stucco, 20, 20, {color:'#46525f'}), g);
+		roof(.18, .80, roofTex(TX.shingle, 3, 1), g);
+		box(GX*2, .45, 1.7, 0, RIDGE+.92, 0, mat({color:'#3a3534'}), g);
+		[1,-1].forEach(s=>{ const sh = new THREE.Shape();
+			sh.moveTo(-D2-.5, BC-.5); sh.lineTo(D2+.5, BC-.5); sh.lineTo(0, RIDGE-.2); sh.closePath();
+			const m2 = new THREE.Mesh(new THREE.ShapeGeometry(sh), texMat(TX.ply, 28,5, 8,4));
+			m2.rotation.y = s*Math.PI/2; m2.position.x = s*W2; g.add(m2); });
+	});
+
+	build('shell3', g=>{
+		const plate = mat({color:'#6d7d3a'}), stud = mat({color:'#c9a26b'});
+		PARTS_W.forEach(w=>{
+			const len = w.b - w.a, c = (w.a+w.b)/2;
+			const th = (w.d==='x' && w.at===-5) ? .62 : .42;                 // the wet wall is built deeper on purpose
+			if(w.d==='z'){ box(th,.3,len,w.at,SLAB+.15,c,plate,g); box(th,.5,len,w.at,BEAMTOP-.25,c,stud,g);
+				for(let z=w.a+.7; z<w.b; z+=1.33) box(th,BEAMTOP-SLAB-.8,.28,w.at,(SLAB+BEAMTOP)/2,z,stud,g); }
+			else { box(len,.3,th,c,SLAB+.15,w.at,plate,g); box(len,.5,th,c,BEAMTOP-.25,w.at,stud,g);
+				for(let x=w.a+.7; x<w.b; x+=1.33) box(.28,BEAMTOP-SLAB-.8,th,x,(SLAB+BEAMTOP)/2,w.at,stud,g); }
+		});
+		const f = mat({color:'#6d7d3a'});
+		walls(T + .075).forEach(w=>{ for(let a=w.a+.5; a<w.b; a+=1.33){
+			if((w.holes||[]).some(h=>a>h[0]-.3 && a<h[1]+.3)) continue;
+			if(w.d==='x') box(.28, BEAMTOP-SLAB, .15, a, (SLAB+BEAMTOP)/2, w.at, f, g);
+			else box(.15, BEAMTOP-SLAB, .28, w.at, (SLAB+BEAMTOP)/2, a, f, g); } });
+	});
+
+	build('dwvwall', g=>{
+		const pvc = mat({color:'#cfc7b5'});
+		STUBS.forEach(s=>{
+			const p = ND[s.n], wall = (s.k==='ks') ? 12.2 : (s.k==='wsh') ? 5.0 : -5.0;
+			const dz = (s.k==='ks') ? -1 : (s.k==='wsh') ? -1 : 1;           // which way the wall faces
+			const zt = wall + dz*0.35;                                       // the tee, inside the wall
+			const yt = SLAB + (s.k==='wc' ? .35 : s.k==='tub' || s.k==='sh' ? .45 : 1.9);
+			cylY(s.r, yt - TOP + .6, p[0], (TOP + yt)/2, p[2], pvc, g);      // up out of the slab
+			if(s.k==='wc'){                                                  // the closet bend
+				pipe([p[0], yt, p[2]], [p[0], yt+.5, p[2]], s.r, pvc, g);
+				cylY(s.r*1.5, .18, p[0], yt+.68, p[2], mat({color:'#c9c6c0'}), g);
+			} else {
+				run([[p[0], yt, p[2]], [p[0], yt + Math.abs(zt-p[2])*0.021, zt]], s.r, pvc, g);   // the trap arm, 1/4 in. per foot
+				cylY(s.r, 1.6, p[0], yt + .8, zt, pvc, g);                   // the sanitary tee in the wall
+			}
+		});
+	});
+
+	build('stackco', g=>{
+		const pvc = mat({color:'#cfc7b5'}), brass = mat({color:'#c9a24c'});
+		cylY(R4, 2.2, ND.j1[0], SLAB + 1.1, -5.35, pvc, g);
+		cylZ(R4*1.1, 1.1, ND.j1[0], SLAB + 1.5, -4.6, pvc, g);
+		cylZ(R4*1.35, .3, ND.j1[0], SLAB + 1.5, -4.0, brass, g);             // the plug you can actually reach
+	});
+
+	build('vents', g=>{
+		const pvc = mat({color:'#cfc7b5'});
+		STUBS.forEach(s=>{
+			if(s.k==='wc') return;                                           // the closets vent through the stack
+			const p = ND[s.n], wall = (s.k==='ks') ? 12.2 : (s.k==='wsh') ? 5.0 : -5.0;
+			const dz = (s.k==='ks') ? -1 : (s.k==='wsh') ? -1 : 1;
+			const zt = wall + dz*0.35;
+			cylY(s.r*0.8, BEAMTOP - SLAB - 2.4, p[0], SLAB + 3.5, zt, pvc, g);  // dry vent, above the flood rim
+		});
+		cylY(R3, BEAMTOP - SLAB - 1.4, ND.j1[0], SLAB + 3.3, -5.35, pvc, g);    // the stack carries on up
+		VENTS.forEach(v=>{                                                      // gathered in the attic
+			cylZ(R2, 8, v.x, BC + 1.4, v.z, pvc, g);
+			cylX(R2, 12, v.x + (v.x<0?-5:5), BC + 1.4, v.z, pvc, g);
+			cylY(R3, 2.0, v.x, BC + .6, v.z, pvc, g); });
+	});
+	build('vroof', g=>{
+		const pvc = mat({color:'#cfc7b5'}), boot = mat({color:'#3a3534'});
+		VENTS.forEach(v=>{
+			const rs = ROOFY(v.z) + .92, top = rs + .55, y0 = BC + .6;           // rs = the shingle surface
+			cylY(R2, top - y0, v.x, (y0 + top)/2, v.z, pvc, g);                  // up and 6 in. proud of the roof
+			cylY(R2*2.8, .16, v.x, rs + .06, v.z, boot, g); });                   // the boot, sealed into the dry-in
+	});
+	build('vattic', g=>{
+		const pvc = mat({color:'#cfc7b5'}), cap = mat({color:'#c46a4a'});
+		VENTS.forEach(v=>{ cylY(R2, 2.6, v.x, BC + 2.8, v.z, pvc, g);
+			cylY(R2+.07, .3, v.x, BC + 4.2, v.z, cap, g); });                    // six caps in an attic
+	});
+
+	build('supply', g=>{
+		const cold = mat({color:'#6f92b8'}), hot = mat({color:'#c46a4a'}), man = mat({color:'#b9c0c7'});
+		box(2.6, 3.4, .7, METER[0]-2.4, SLAB + 4.2, 12.5, man, g);              // the manifold
+		cylZ(.16, 11, METER[0]-2.4, BC - .4, 7, cold, g);
+		cylZ(.16, 11, METER[0]-2.4, BC - .8, 7, hot, g);
+		cylX(.16, 34, -3, BC - .4, 1.4, cold, g);                               // the trunks, in the attic
+		cylX(.16, 34, -3, BC - .8, 0.8, hot, g);
+		STUBS.forEach(s=>{
+			if(s.k==='wc'){ cylY(.13, BC - SLAB - 2.6, ND[s.n][0], SLAB + 2.6, -5.0, cold, g); return; }
+			const p = ND[s.n], wall = (s.k==='ks') ? 12.2 : (s.k==='wsh') ? 5.0 : -5.0;
+			[[-.35, cold],[.35, hot]].forEach(([o,m])=>
+				cylY(.13, BC - SLAB - 2.2, p[0] + o, SLAB + 2.8, wall, m, g)); });
+		cylY(.16, 5.5, WHP[0], SLAB + 3.2, WHP[1], cold, g);
+		cylY(.16, 5.5, WHP[0] + .9, SLAB + 3.2, WHP[1], hot, g);
+	});
+	build('valves', g=>{
+		const body = mat({color:'#c9a24c'}), plate = mat({color:'#b9c0c7'});
+		[[-16.0,-5.0],[8.5,-5.0]].forEach(([x,z])=>{
+			box(1.5, 1.5, .9, x, SLAB + 4.0, z, body, g);
+			cylZ(.22, 1.1, x, SLAB + 4.0, z + .8, plate, g);
+			cylY(.16, 4.6, x, SLAB + 6.6, z, mat({color:'#c46a4a'}), g); });      // the riser to the head
+	});
+	build('plates', g=>{
+		const steel = mat({color:'#9aa0a6'});
+		STUBS.forEach(s=>{ const p = ND[s.n], wall = (s.k==='ks') ? 12.2 : (s.k==='wsh') ? 5.0 : -5.0;
+			[SLAB + .3, BEAMTOP - .45].forEach(y=>{
+				box(1.5, .9, .07, p[0], y, wall + .33, steel, g);
+				box(1.5, .9, .07, p[0], y, wall - .33, steel, g); }); });
+	});
+	build('pan', g=>{
+		const liner = mat({color:'#3b3f44'}), water = mat({color:'#4f86c6', transparent:true, opacity:.6});
+		box(4.6, .2, 4.6, 8.5, SLAB + .12, -9.6, liner, g);
+		[[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx,dz])=>
+			box(dx?.2:4.6, 1.2, dz?.2:4.6, 8.5 + dx*2.3, SLAB + .75, -9.6 + dz*2.3, liner, g));
+		box(4.3, .55, 4.3, 8.5, SLAB + .5, -9.6, water, g);                      // 2 in. at the threshold
+	});
+	build('gauges', g=>{
+		const stl = mat({color:'#b9c0c7'}), face = mat({color:'#f4f2ec'}), needle = mat({color:'#c46a4a'});
+		[[ND.j1[0] - 1.4, -5.0],[METER[0]-2.4, 12.5]].forEach(([x,z],i)=>{
+			cylY(.18, 3.2, x, SLAB + 5.4, z, stl, g);
+			const f = cylZ(.75, .22, x, SLAB + 7.1, z + .4, face, g);
+			box(.1, .6, .1, x, SLAB + 7.35, z + .55, needle, g); });
+	});
+
+	/* ---- step 6 ---- */
+	build('gas', g=>{
+		const bi = mat({color:'#3f4247'}), yel = mat({color:'#d4a24c'}), bxm = siteMat({color:'#9aa0a6'});
+		box(2.4, 2.6, 1.6, GASM[0] + .9, 3.4, GASM[1], bxm, g);                   // the meter, outside
+		cylY(.16, 3.4, GASM[0] + .9, 1.7, GASM[1] - .8, siteMat({color:'#d4a24c'}), g);
+		cylX(.16, 4.0, GASM[0] - 1.0, 4.2, GASM[1], yel, g);                      // through the wall
+		cylY(.16, BC - 4.2, INX - .6, (BC + 4.2)/2, GASM[1], bi, g);
+		cylZ(.16, 20, INX - .6, BC - .5, 2, bi, g);                               // along the attic
+		cylX(.16, 34, 0, BC - .5, 11.5, bi, g);
+		[[WHP[0], WHP[1]],[12, 11.5]].forEach(([x,z])=>{                          // heater and range
+			cylY(.16, BC - SLAB - 3.4, x, SLAB + 4.2, z, bi, g);
+			cylY(.16, 1.1, x, SLAB + 2.0, z, bi, g);                              // the drip leg
+			box(.5,.5,.5, x, SLAB + 3.1, z, mat({color:'#c9a24c'}), g); });        // the shutoff
+	});
+	build('gauge2', g=>{
+		const stl = mat({color:'#b9c0c7'}), face = mat({color:'#f4f2ec'}), needle = mat({color:'#c46a4a'});
+		cylY(.16, 2.6, INX - .6, 6.0, GASM[1] + 1.6, stl, g);
+		cylZ(.8, .24, INX - .6, 7.3, GASM[1] + 1.9, face, g);
+		box(.1, .64, .1, INX - .72, 7.6, GASM[1] + 2.05, needle, g);
+	});
+
+	/* ---- step 7 ---- */
+	build('closed', g=>{
+		shellW(walls(T + .22), SLAB, BEAMTOP, .12, TX.board, 4, 8, g);
+		const ceil = new THREE.Mesh(new THREE.PlaneGeometry(INX*2-.4, IN*2-.4), texMat(TX.board, 40,28, 4,8));
+		ceil.rotation.x = Math.PI/2; ceil.position.y = BEAMTOP - .06; g.add(ceil);
+		PARTS_W.forEach(w=>{ const len=w.b-w.a, c=(w.a+w.b)/2, th = (w.d==='x' && w.at===-5) ? .38 : .27;
+			[-1,1].forEach(s=>{ if(w.d==='z') box(.12,BEAMTOP-SLAB,len,w.at+s*th,(SLAB+BEAMTOP)/2,c,texMat(TX.board,len,10,4,8),g);
+				else box(len,BEAMTOP-SLAB,.12,c,(SLAB+BEAMTOP)/2,w.at+s*th,texMat(TX.board,len,10,4,8),g); }); });
+		const tile = new THREE.Mesh(new THREE.PlaneGeometry(INX*2-.5, IN*2-.5), texMat(TX.tile, 40,28, 2,2));
+		tile.rotation.x = -Math.PI/2; tile.position.y = SLAB + .06; g.add(tile);
+	});
+
+	build('wheater', g=>{
+		const stl = mat({color:'#d9dee4'}), pan = mat({color:'#b9c0c7'}), tpr = mat({color:'#c46a4a'});
+		box(4.2, .35, 4.2, WHP[0], SLAB + .17, WHP[1], pan, g);                   // the pan, 1½ in. deep
+		[[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx,dz])=>
+			box(dx?.2:4.2, .5, dz?.2:4.2, WHP[0]+dx*2.1, SLAB + .3, WHP[1]+dz*2.1, pan, g));
+		cylY(1.4, 5.0, WHP[0], SLAB + 2.9, WHP[1], stl, g);
+		cylY(.9, .4, WHP[0], SLAB + 5.6, WHP[1], stl, g);
+		cylY(.16, 4.4, WHP[0] + 1.7, SLAB + 3.0, WHP[1], tpr, g);                 // the relief line, downhill
+		cylY(.16, .9, WHP[0] + 1.7, SLAB + .7, WHP[1], tpr, g);                   // ends 6 in. off the floor, open
+		cylY(.13, .6, WHP[0] - 1.9, SLAB + .5, WHP[1], mat({color:'#b9c0c7'}), g);// the pan drain, 3/4 in.
+		cylX(.13, 3.4, WHP[0] - 3.4, SLAB + .35, WHP[1], mat({color:'#b9c0c7'}), g);
+	});
+	build('etank', g=>{
+		const t = mat({color:'#2f5f8f'}), brk = mat({color:'#b9c0c7'});
+		cylY(1.0, 2.0, WHP[0] + .1, SLAB + 7.4, WHP[1] + 1.4, t, g);
+		cylY(.13, 1.2, WHP[0] + .1, SLAB + 6.0, WHP[1] + 1.4, mat({color:'#6f92b8'}), g);
+		box(.2, 1.6, 1.6, WHP[0] - 1.0, SLAB + 7.4, WHP[1] + 1.4, brk, g);
+	});
+	build('toilets', g=>{
+		const por = mat({color:'#f4f2ec'}), seat = mat({color:'#e6e3da'});
+		[ND.wc1, ND.wc2].forEach(p=>{
+			box(1.6,1.6,.8, p[0], SLAB + 1.9, -5.5, por, g);                      // the tank against the wall
+			box(1.3,.9,1.5, p[0], SLAB + .55, -6.5, por, g);
+			const bowl = new THREE.Mesh(new THREE.SphereGeometry(.85,14,10), por);
+			bowl.scale.y = .55; bowl.position.set(p[0], SLAB + .85, -7.3); g.add(bowl);
+			cylY(.88, .1, p[0], SLAB + 1.16, -7.3, seat, g);
+			cylY(.18, .7, p[0] - 1.0, SLAB + .35, -5.8, mat({color:'#b9c0c7'}), g); });
+	});
+	build('lavs', g=>{
+		const por = mat({color:'#f4f2ec'}), cab = mat({color:'#7a5c3a'}), top = mat({color:'#c9c6c0'});
+		const chr = mat({color:'#c9ccd0'});
+		[ND.lv1, ND.lv2].forEach(p=>{
+			box(3.4,2.6,1.9, p[0], SLAB + 1.3, -6.1, cab, g);
+			box(3.7,.22,2.1, p[0], SLAB + 2.7, -6.1, top, g);
+			const b = new THREE.Mesh(new THREE.SphereGeometry(.8,14,10), por);
+			b.scale.y = .45; b.position.set(p[0], SLAB + 2.6, -6.1); g.add(b);
+			cylY(.14, .8, p[0], SLAB + 3.1, -5.6, chr, g);
+			cylY(.13, .9, p[0], SLAB + 1.9, -6.1, chr, g);                        // the P-trap
+			cylZ(.13, .9, p[0], SLAB + 1.5, -5.9, chr, g); });
+		box(5.5,2.8,2.2, ND.ksB[0], SLAB + 1.4, 11.4, cab, g);                    // the kitchen run
+		box(5.8,.25,2.4, ND.ksB[0], SLAB + 2.9, 11.4, top, g);
+		box(4.2,.5,1.8, ND.ksB[0], SLAB + 2.8, 11.4, mat({color:'#c9ccd0'}), g);
+		cylY(.14, 1.4, ND.ksB[0], SLAB + 3.6, 12.0, chr, g);
+		box(2.6,2.8,2.2, ND.kend[0], SLAB + 1.4, 11.4, mat({color:'#c9ccd0'}), g);// the dishwasher
+		run([[ND.kend[0], SLAB + 2.6, 11.4],[ND.ksB[0]+1.4, SLAB + 3.4, 11.4],
+		     [ND.ksB[0]+1.0, SLAB + 1.9, 11.4]], .1, chr, g);                     // the high loop
+	});
+	build('hosebibb', g=>{
+		const br = siteMat({color:'#c9a24c'}), vb = siteMat({color:'#9aa0a6'});
+		[[6, D2 + .4, 1],[-6, -D2 - .4, -1]].forEach(([x,z,s])=>{
+			cylZ(.13, 1.1, x, SLAB + 1.8, z + s*.5, br, g);
+			cylY(.22, .5, x, SLAB + 2.2, z + s*.9, vb, g);
+			box(.7,.5,.16, x, SLAB + 1.8, z, br, g); });
+	});
+	build('washer', g=>{
+		const bx = mat({color:'#e6e3da'}), pvc = mat({color:'#cfc7b5'}), chr = mat({color:'#c9ccd0'});
+		const p = ND.wshB;
+		box(1.8, 1.8, .5, p[0], SLAB + 3.2, 4.75, bx, g);                         // the box in the wall
+		[[-.45,'#c46a4a'],[.45,'#6f92b8']].forEach(([o,c])=>
+			cylZ(.13, .7, p[0] + o, SLAB + 3.3, 5.1, mat({color:c}), g));
+		cylY(.21, 2.6, p[0], SLAB + 2.4, 4.9, pvc, g);                            // the standpipe, 18–42 in.
+		cylY(.21, .8, p[0], SLAB + .9, 4.9, pvc, g);
+		cylZ(.21, .9, p[0], SLAB + .9, 5.3, pvc, g);                              // the trap, 6–18 in. up
+		box(3.0, 3.4, 3.0, p[0] + .4, SLAB + 1.7, 3.0, mat({color:'#dcdfe3'}), g);
+	});
+	build('walkwet', g=>{
+		const w = mat({color:'#4f86c6', transparent:true, opacity:.65});
+		STUBS.forEach(s=>{ const p = ND[s.n], z = (s.k==='ks') ? 11.4 : (s.k==='wsh') ? 4.9 : -6.6;
+			cylY(s.r*0.8, .5, p[0], SLAB + 1.5, z, w, g); });                      // every trap, wet
+		cylY(.09, 2.0, ND.ksB[0], SLAB + 2.6, 12.0, w, g);                         // water running at the far faucet
+		cylY(.09, 2.0, ND.lv1[0], SLAB + 2.2, -5.6, w, g);
+	});
+
+	/* the inspector stands where he checked */
+	const SPOT = {gate1:[4, 0, 26], gate2:[11, 0, -2.5], gate3:[-2, 1, 2], gate4:[18, 0, 21],
+	              gate5:[-2.5, SLAB, -1], gate6:[26, 0, -6], gate7:[-9, 0, 21]};
+	Object.keys(SPOT).forEach((k,i)=>build(k, g=>{
+		const p = person(i+1, g); p.position.set(SPOT[k][0], SPOT[k][1], SPOT[k][2]);
+		p.rotation.y = Math.atan2(-SPOT[k][0], -SPOT[k][2]) + 0.4;
+		MATS[k].forEach(m=>m.userData.site = true);
+	}));
+}
+
+/* ============================================================
+   VISIBILITY — the same `placed` set, in three dresses
+   ============================================================ */
+const L = layer => PARTS.some(p=>p.layer===layer && state.placed.has(p.id));
+const OVERRIDE = {
+	layout:  ()=> L('layout')  && !L('shell'),      // the chalk lines get poured over
+	utest:   ()=> L('utest')   && !L('shell'),      // the test riser comes out before the pour
+	protect: ()=> L('protect') && !L('shell'),
+	gauges:  ()=> L('gauges')  && !L('closed'),     // both gauges come off when the walls close
+	gauge2:  ()=> L('gauge2')  && !L('closed'),
+	pan:     ()=> L('pan')     && !L('closed'),     // the liner goes under the tile
+};
+/* the shell is context, not the lesson — in X-ray it goes to glass so you can
+   see the pipe inside it. HOUSE cut the model in half with a clipping plane;
+   that hides half the plumbing, so this model ghosts instead of cuts. */
+const SHELLY = new Set(['shell','shell2','shell3','closed','pad']);
+
+function redraw(){
+	if(!renderer) return;
+	for(const name in LG) LG[name].visible = OVERRIDE[name] ? OVERRIDE[name]() : L(name);
+	applyView();
+}
+
+function applyView(){
+	if(!renderer) return;
+	const v = state.view;
+	renderer.localClippingEnabled = false;
+	const lit = new Set();
+	if(v === 'inspector'){
+		const openGate = PARTS.find(p=>p.gate && !state.placed.has(p.id));
+		(openGate ? openGate.lit : []).forEach(x=>lit.add(x));
+	}
+	for(const name in MATS){
+		const on = v !== 'inspector' || lit.has(name) || /^gate/.test(name) || name==='site';
+		const ghost = (v === 'xray') && SHELLY.has(name);
+		MATS[name].forEach(m=>{
+			m.transparent = m.userData.tr || !on || ghost;
+			m.opacity = !on ? 0.07 : ghost ? 0.14 : m.userData.op;
+			m.depthWrite = !(ghost || !on);
+			if(m.emissive) m.emissive.setHex(v==='inspector' && lit.has(name) ? 0x554013 : 0x000000);
+			m.needsUpdate = true;
+		});
+	}
+	dirty = true;
+}
+document.querySelectorAll('.toggle button').forEach(b=>b.addEventListener('click', ()=>{
+	document.querySelectorAll('.toggle button').forEach(x=>x.classList.toggle('on', x===b));
+	state.view = b.dataset.view; applyView();
+	const p = {xray:[0.34,0.26,60,0,6.4,0], street:[0.95,0.18,68,0,6,0], inspector:[cam.az,cam.el,cam.r,cam.tx,cam.ty,cam.tz]}[state.view];
+	flyTo(p[0], p[1], p[2], p[3], p[4], p[5]);
+	say('', state.view==='street' ? '<b>From the street.</b> Walk around it. A tee on its back and six vents capped in the attic look exactly like this too.'
+		: state.view==='inspector' ? '<b>Inspector view.</b> Only what the open gate checks is lit. If he cannot see it, he cannot pass it.'
+		: '<b>X-ray.</b> The slab, the block and the drywall go to glass so you can see the pipe inside them. Spin it and follow the water.');
+}));
+
+/* ============================================================
+   CAMERA — drag to spin, scroll to zoom, pinch on a phone
+   ============================================================ */
+function place(){
+	const ce = Math.max(-1.35, Math.min(1.45, cam.el));
+	camera.position.set(cam.tx + cam.r*Math.sin(cam.az)*Math.cos(ce),
+	                    cam.ty + cam.r*Math.sin(ce),
+	                    cam.tz + cam.r*Math.cos(cam.az)*Math.cos(ce));
+	camera.lookAt(cam.tx, cam.ty, cam.tz);
+	dirty = true;
+}
+function flyTo(az, el, r, tx, ty, tz){
+	cam.anim = {az0:cam.az, el0:cam.el, r0:cam.r, az, el, r,
+		tx0:cam.tx, ty0:cam.ty, tz0:cam.tz,
+		tx:(tx===undefined?cam.tx:tx), ty:(ty===undefined?cam.ty:ty), tz:(tz===undefined?cam.tz:tz),
+		t0:performance.now(), ms:650};
+}
+/* The yard sign, the sewer tap at the street, the meter box and the gas meter all
+   stand well outside the shot that frames the house — so those moves used to change
+   nothing you could see. A card may name its own shot; everything else flies home. */
+const HOME = [0.34, 0.26, 60, 0, 6.4, 0];
+const SHOT = {
+	pm:  [-0.25, 0.22, 46, -14,  4, 10],      // the job sign
+	tp:  [ 0.10, 0.34, 54,  -2,  0, 25],      // the tap and the cleanout at the line
+	i1:  [ 0.10, 0.34, 54,  -2,  0, 25],
+	ws:  [ 0.62, 0.30, 52,  12,  0, 20],      // the meter box
+	i4:  [ 0.62, 0.30, 52,  12,  0, 20],
+	vr:  [ 0.34, 0.62, 56,   0, 13,  0],      // the vents through the roof
+	va:  [ 0.34, 0.62, 56,   0, 13,  0],
+	gp:  [ 1.45, 0.24, 46,  16,  4, -6],      // the gas meter, right side
+	gt:  [ 1.45, 0.24, 46,  16,  4, -6],
+	i6:  [ 1.45, 0.24, 46,  16,  4, -6],
+	hb:  [ 0.95, 0.22, 54,   4,  3, 14],      // the hose bibb at the front wall
+};
+let inShot = null;
+function applyShot(id){
+	if(SHOT[id]){ inShot = id; flyTo.apply(null, SHOT[id]); return; }
+	if(inShot){ inShot = null; flyTo.apply(null, HOME); }
+}
+function orbitInit(){
+	const c = renderer.domElement; let p = null, pinch = 0;
+	c.style.touchAction = 'none';
+	c.addEventListener('pointerdown', e=>{ p = {x:e.clientX, y:e.clientY}; cam.anim=null; c.setPointerCapture(e.pointerId); });
+	c.addEventListener('pointermove', e=>{ if(!p) return;
+		cam.az -= (e.clientX - p.x) * 0.008; cam.el += (e.clientY - p.y) * 0.006;
+		p = {x:e.clientX, y:e.clientY}; place(); });
+	const stop = ()=>{ p = null; };
+	c.addEventListener('pointerup', stop); c.addEventListener('pointercancel', stop); c.addEventListener('pointerleave', stop);
+	c.addEventListener('wheel', e=>{ e.preventDefault(); cam.anim=null;
+		cam.r = Math.max(26, Math.min(180, cam.r * (1 + Math.sign(e.deltaY)*0.09))); place(); }, {passive:false});
+	c.addEventListener('touchmove', e=>{ if(e.touches.length!==2) return; e.preventDefault();
+		const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+		if(pinch) { cam.r = Math.max(26, Math.min(180, cam.r * pinch/d)); place(); }
+		pinch = d; }, {passive:false});
+	c.addEventListener('touchend', ()=>{ pinch = 0; });
+}
+
+/* ============================================================
+   THE LEAK — blue drips where the part would not go
+   ============================================================ */
+const drips = [];
+function leak(e){
+	let x = 0, y = BEAMTOP, z = 8;
+	if(e && e.clientX && renderer){
+		const r = renderer.domElement.getBoundingClientRect();
+		const nx = ((e.clientX - r.left)/r.width)*2 - 1, ny = -((e.clientY - r.top)/r.height)*2 + 1;
+		const rc = new THREE.Raycaster(); rc.setFromCamera({x:nx, y:ny}, camera);
+		const hit = new THREE.Vector3();
+		if(rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,0,1), 0), hit)){
+			x = Math.max(-26, Math.min(26, hit.x)); y = Math.max(2, Math.min(RIDGE, hit.y));
+		}
+	}
+	for(let i=0;i<6;i++){
+		const m = new THREE.Mesh(new THREE.SphereGeometry(.42, 8, 6), new THREE.MeshBasicMaterial({color:0x6f92b8, transparent:true, opacity:.95}));
+		m.position.set(x + (Math.random()-.5)*3, y + i*.5, z + (Math.random()-.5)*3);
+		root.add(m); drips.push({m, t:performance.now() + i*90, v:0});
+	}
+	dirty = true;
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+function scene3d(){
+	const c = document.createElement('canvas');
+	c.style.cssText = 'width:100%;height:100%;display:block;border-radius:14px;cursor:grab';
+	holder.appendChild(c);
+	renderer = new THREE.WebGLRenderer({canvas:c, antialias:true});
+	renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+	scene = new THREE.Scene();
+	scene.background = new THREE.Color(0x0b1119);
+	scene.fog = new THREE.Fog(0x0b1119, 120, 260);
+	camera = new THREE.PerspectiveCamera(38, 1, 0.5, 500);
+	root = new THREE.Group(); scene.add(root);
+	scene.add(new THREE.HemisphereLight(0xbfd4ee, 0x30281e, 0.85));
+	const sun = new THREE.DirectionalLight(0xfff0d0, 0.85); sun.position.set(48, 66, 34); scene.add(sun);
+	const fill = new THREE.DirectionalLight(0x88a8cc, 0.30); fill.position.set(-40, 24, -30); scene.add(fill);
+	clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
+	textures(); buildAll(); clipAll(); orbitInit(); place(); resize3d();
+	loop();
+}
+function resize3d(){
+	if(!renderer) return;
+	const w = holder.clientWidth, h = holder.clientHeight;
+	if(w < 2 || h < 2) return;
+	renderer.setSize(w, h, false);
+	camera.aspect = w/h; camera.updateProjectionMatrix(); dirty = true;
+}
+function loop(){
+	raf = requestAnimationFrame(loop);
+	const now = performance.now();
+	if(cam.anim){
+		const a = cam.anim, k = Math.min(1, (now - a.t0)/a.ms), e = k<.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
+		cam.az = a.az0 + (a.az - a.az0)*e; cam.el = a.el0 + (a.el - a.el0)*e; cam.r = a.r0 + (a.r - a.r0)*e;
+		cam.tx = a.tx0 + (a.tx - a.tx0)*e; cam.ty = a.ty0 + (a.ty - a.ty0)*e; cam.tz = a.tz0 + (a.tz - a.tz0)*e;
+		if(k>=1) cam.anim = null; place();
+	}
+	for(let i=drips.length-1; i>=0; i--){
+		const d = drips[i]; if(now < d.t) continue;
+		d.v += 0.055; d.m.position.y -= d.v; d.m.material.opacity -= 0.02;
+		if(d.m.position.y < 0 || d.m.material.opacity <= 0){ root.remove(d.m); d.m.geometry.dispose(); d.m.material.dispose(); drips.splice(i,1); }
+		dirty = true;
+	}
+	if(dirty){ renderer.render(scene, camera); dirty = false; }
+}
+
+/* the ring's layout() already sizes #housebox; follow it */
+const _layout = layout;
+layout = function(){ _layout(); resize3d(); };
+window.removeEventListener('resize', _layout);
+window.addEventListener('resize', layout);
+
+buildRing();
+if(window.THREE){ scene3d(); redraw(); }
+else { holder.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center;color:#9a9789;font-size:13px;line-height:1.5">The 3D house needs WebGL, and this browser will not start it.<br><br><a style="color:#d4a24c" href="../../../HOUSE/apps/cbs/index.html">Open HOUSE Block instead →</a></div>'; }
+score();
+</script>
