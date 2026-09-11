@@ -209,6 +209,25 @@ button.ghost[disabled]{opacity:.32;cursor:not-allowed}
 	padding:2px 6px;border-radius:99px;background:#12182B;color:#c4a574}
 .bigc{font-family:var(--mono);font-size:8px;letter-spacing:.16em;padding:2px 6px;border-radius:99px;background:#12182B;color:#c4a574;white-space:nowrap}
 #score .bad{color:var(--rust)}
+/* ---------- the board ---------- */
+#board{position:fixed;inset:0;z-index:34;display:none;background:rgba(7,8,12,.86);align-items:center;justify-content:center;padding:20px}
+#board.on{display:flex}
+#board .paper{max-width:min(46rem,100%)}
+#board h2{font-family:var(--serif);font-size:22px;font-weight:400;letter-spacing:0;text-transform:none;color:#161410;text-align:left;margin:0 0 4px}
+.blede{font-size:12.5px;line-height:1.55;color:#5c584f;margin:0 0 14px;max-width:62ch}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:9px}
+.bcall{display:block;text-align:left;position:relative;font:inherit;cursor:pointer;padding:12px 13px 11px 40px;
+	border:1px solid #d6cfbe;border-radius:12px;background:#fdfbf5;color:#161410;transition:border-color .12s,transform .12s}
+.bcall:hover{border-color:var(--gold);transform:translateY(-1px)}
+.bn{position:absolute;left:12px;top:11px;font-family:var(--mono);font-size:15px;font-weight:700;color:#b5ad9a}
+.bq{display:block;font-family:var(--serif);font-size:17px;line-height:1.15}
+.bl{display:block;font-size:11px;color:#6d6b62;margin-top:3px}
+.bs{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;margin-top:7px;color:#8a857a}
+.bcall.closed{background:#eef4ec;border-color:#a9c3a4}.bcall.closed .bn,.bcall.closed .bs{color:#4f7d3e}
+.bcall.back{background:#fbeeea;border-color:#d9a893}.bcall.back .bn,.bcall.back .bs{color:#b3503a}
+.bcall.open{border-color:var(--gold)}.bcall.open .bs{color:#8a5a12}
+.btot{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#6d6b62;margin:14px 4px 0;border-top:1px solid #ddd7c9;padding-top:10px}
+.btot b{color:#161410}.btot .bad{color:#b3503a}
 /* ---------- the rates sheet ---------- */
 #rates{position:fixed;inset:0;z-index:32;display:none;background:rgba(7,8,12,.82);align-items:center;justify-content:center;padding:20px}
 #rates.on{display:flex}
@@ -231,7 +250,7 @@ button.ghost[disabled]{opacity:.32;cursor:not-allowed}
 <div id="stage" aria-label="The 3D house, with every service call around it">
 	<svg id="dial" aria-hidden="true"></svg>
 	<div id="housebox"></div>
-	<p id="msg"><b>47 cards, 6 calls.</b> Drag the top card onto the house. Test before you replace — every time you reach for a part you have not proved is broken, it costs you.</p>
+	<p id="msg"><b>Six calls on the board.</b> Pick one and work its deck. Test before you replace — every time you reach for a part you have not proved is broken, it costs you.</p>
 
 	<div class="corner" id="tl">
 		<div class="lockup" aria-label="Covenant Builders">
@@ -248,7 +267,7 @@ button.ghost[disabled]{opacity:.32;cursor:not-allowed}
 	<div class="corner" id="tr"><div id="stamps"></div></div>
 	<div class="corner" id="bl">
 		<span class="score" id="score">Calls 0/6 · Callbacks 0 · Ate $0 · Invoice $0</span>
-		<div style="display:flex;gap:6px;flex-wrap:wrap;max-width:60vw"><button class="ghost" id="undo" disabled title="Take the last step back (Ctrl+Z)">&#8630; Reverse</button><button class="ghost" id="dall"></button><button class="ghost" id="reset">Start over</button><button class="ghost" id="showrates">Rates</button><button class="ghost" id="showchart">The table</button></div>
+		<div style="display:flex;gap:6px;flex-wrap:wrap;max-width:60vw"><button class="ghost" id="undo" disabled title="Take the last step back (Ctrl+Z)">&#8630; Reverse</button><button class="ghost" id="dall"></button><button class="ghost" id="reset">Start over</button><button class="ghost" id="showboard">&#9664; The six calls</button><button class="ghost" id="showrates">Rates</button><button class="ghost" id="showchart">The table</button></div>
 	</div>
 	<div class="corner" id="br"><span class="foot"><b>Covenant Builders</b> · CBC1253676 · (772) 473-7115<br>Vero Beach · Sebastian · Fort Pierce · Port St. Lucie · Fellsmere · Hablamos español<br>Rates are a Treasure Coast market range for 2026, not a quote — open <b>Rates</b> for every number and its source. Water tiers from the <a href="https://indianriver.gov/Rate%20booklet%20Jan%202025.pdf" target="_blank" rel="noopener">Indian River County utility rate booklet</a>. Code from FBC — Plumbing, 8th Ed. A training model, not a price list.</span></div>
 </div>
@@ -267,6 +286,13 @@ button.ghost[disabled]{opacity:.32;cursor:not-allowed}
 <div id="rates" role="dialog" aria-label="Treasure Coast plumbing rates"><div class="paper"><button class="close" id="ratesclose" aria-label="Close">×</button>
 	<h2>What it goes for on the Treasure Coast — 2026</h2><div id="ratebody"></div></div></div>
 <div id="done"><div><div class="stars" id="d-stars"></div><h2 id="d-title"></h2><p id="d-body"></p><button class="eat" id="again">Run the day again</button></div></div>
+<div id="board" role="dialog" aria-label="The six calls"><div class="paper">
+	<button class="close" id="boardclose" aria-label="Close">×</button>
+	<h2>Six calls on the board</h2>
+	<p class="blede">Pick one. Each call is its own deck — listen, look, find, fix, prove — and you can work them in any order or come back to one you left. The money runs across the whole day.</p>
+	<div class="bgrid" id="bgrid"></div>
+	<div class="btot" id="btot"></div>
+</div></div>
 <div id="ghost"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
@@ -401,7 +427,7 @@ const PARTS = [
 		grade:'1', src:'Same dye test as the diagnosis, run as the proof. It costs you fifteen minutes of paperwork time.', layer:'p1', lit:['x1','t1','p1']},
 
 	/* ================= CALL 2 — “It won’t drain” ================= */
-	{id:'c2', z:8, sym:'C2', art:'phone', name:'Ask what went down it and when it changed', short:'Take the call', fam:'ca', row:2, needs:['p1'], price:CALLFEE,
+	{id:'c2', z:8, sym:'C2', art:'phone', name:'Ask what went down it and when it changed', short:'Take the call', fam:'ca', row:2, needs:[], price:CALLFEE,
 		law:'A drain that got slow over months and a drain that stopped on Sunday are two different jobs.',
 		spec:'You ask what they put down it — grease, rice, coffee grounds, a disposal that gets everything. Then you ask whether it got slow gradually or stopped all at once. Gradual is a coating building up in the branch. All at once is an object, or it is the main and the kitchen is just where it showed first. You also ask whether anything else in the house is slow, because that answer changes which truck you send.',
 		fail:'Roll a hand auger for what turns out to be the main line and you are driving back for the big machine.',
@@ -443,7 +469,7 @@ const PARTS = [
 		grade:'1', src:'Both bowls at once is the design load on a kitchen branch. Anything less does not prove the line.', layer:'p2', lit:['x2','t2','p2']},
 
 	/* ================= CALL 3 — “No hot water” ================= */
-	{id:'c3', z:15, sym:'C3', art:'phone', name:'Ask how old it is and whether it is none or not enough', short:'Take the call', fam:'ca', row:3, needs:['p2'], price:CALLFEE,
+	{id:'c3', z:15, sym:'C3', art:'phone', name:'Ask how old it is and whether it is none or not enough', short:'Take the call', fam:'ca', row:3, needs:[], price:CALLFEE,
 		law:'No hot water at all and warm-then-cold are different faults in the same box.',
 		spec:'You ask three things. How old is the heater — if they do not know, you will read the serial on site. Is there no hot water at all, or does it start hot and go cold partway through the second shower? And has the breaker tripped. None at all points at the upper element, the upper thermostat or a tripped high-limit. Warm then cold points at the lower element, which is the classic. Warm but never hot points at a thermostat.',
 		fail:'Load a new water heater on the truck before you have read a single ohm and you will sell one whether it needed it or not.',
@@ -485,7 +511,7 @@ const PARTS = [
 		grade:'1', src:SRC_P+' 424.3 — the shower valve limit stop is set to a maximum of 120°F. The far fixture for fifteen minutes is the real-world load.', layer:'p3', lit:['x3','t3','p3']},
 
 	/* ================= CALL 4 — “It’s dripping” ================= */
-	{id:'c4', z:22, sym:'C4', art:'phone', name:'Ask when it drips, not where', short:'Take the call', fam:'ca', row:4, needs:['p3'], price:CALLFEE,
+	{id:'c4', z:22, sym:'C4', art:'phone', name:'Ask when it drips, not where', short:'Take the call', fam:'ca', row:4, needs:[], price:CALLFEE,
 		law:'A pipe that drips on a schedule is not a leaking pipe. It is a valve doing its job.',
 		spec:'You ask when. All the time, or after somebody showers? In the afternoon? If the answer is “about an hour after we use hot water” you already know what this is before you get in the truck, because that is the heater firing and a closed system with nowhere to put the expansion. You tell them to put a bucket under it and not to touch the valve.',
 		fail:'Hear “dripping pipe” and load a soldering kit. You are going to need a gauge and a tank.',
@@ -522,7 +548,7 @@ const PARTS = [
 		grade:'1', src:'A correctly pre-charged tank absorbs the expansion; the gauge barely moves. That is the whole test.', layer:'p4', lit:['x4','t4','p4']},
 
 	/* ================= CALL 5 — “It stinks” ================= */
-	{id:'c5', z:28, sym:'C5', art:'phone', name:'Ask which room and whether anybody uses it', short:'Take the call', fam:'ca', row:5, needs:['p4'], price:CALLFEE,
+	{id:'c5', z:28, sym:'C5', art:'phone', name:'Ask which room and whether anybody uses it', short:'Take the call', fam:'ca', row:5, needs:[], price:CALLFEE,
 		law:'A smell is air, and air means a trap is empty or a vent is not working. Those are the only two doors.',
 		spec:'You ask which room, and then you ask the question that solves half of these on the phone: does anybody actually use that bathroom? A guest bath nobody has run since Easter has a trap that evaporated, and that is a jug of water, not a repair. You also ask whether the smell is worse after they run the washer, because that points at the vent instead.',
 		fail:'Book it as a two-hour tear-out and find out it was a dry trap. You have burned a slot you could have sold.',
@@ -564,7 +590,7 @@ const PARTS = [
 		grade:'1', src:'Six flushes is enough to find a seal that only fails under a full bowl. The closed-door wait is what makes the smell test honest.', layer:'p5', lit:['x5','t5','p5']},
 
 	/* ================= CALL 6 — “It’s backing up” ================= */
-	{id:'c6', z:35, sym:'C6', art:'phone', name:'Ask one question and give one instruction', short:'Take the call', fam:'ca', row:6, needs:['p5'], price:CALLFEE,
+	{id:'c6', z:35, sym:'C6', art:'phone', name:'Ask one question and give one instruction', short:'Take the call', fam:'ca', row:6, needs:[], price:CALLFEE,
 		law:'On this one call you talk before you listen, because every minute they keep using water makes your job dirtier.',
 		spec:'First the instruction: stop using water right now, everybody, including the washer and the dishwasher. Then the question: is it every fixture in the house, or one side of it? Every fixture means the main and you bring the big machine and the camera. One side means a branch. You also ask whether the cleanout cap in the yard is up or down, because if it has popped, the line is already full and this is today, not tomorrow.',
 		fail:'Let them run a wash cycle while you drive over and you arrive to a bathroom floor instead of a slow drain.',
@@ -613,7 +639,7 @@ const NG = ROWS.length;
 /* ============================================================
    STATE
    ============================================================ */
-const state = {placed:new Set(), leaks:0, fails:0, passed:new Set(), burned:new Set(), failedRows:new Set(), view:'xray', sel:null, mode:'deck', invoice:0, ate:0};
+const state = {placed:new Set(), leaks:0, fails:0, passed:new Set(), burned:new Set(), failedRows:new Set(), view:'xray', sel:null, mode:'deck', invoice:0, ate:0, call:0};
 const stage = document.getElementById('stage');
 const SORTED = PARTS.slice().sort((a,b)=>a.z-b.z || (a.trap?1:0)-(b.trap?1:0));
 const ORDER = SORTED.filter(p=>p.fam!=='ca');        // the ring: the work
@@ -732,20 +758,21 @@ function tileNode(p, live, big){
    ============================================================ */
 let deckIdx = 0;
 const deckBox = document.getElementById('deck');
-function deckAvail(){ return SORTED.filter(p=>!state.placed.has(p.id) && !state.burned.has(p.id) && !coveredBy(p)); }
+function callCards(n){ return SORTED.filter(p=>p.row===n); }
+function deckAvail(){ return SORTED.filter(p=>p.row===state.call && !state.placed.has(p.id) && !state.burned.has(p.id) && !coveredBy(p)); }
 function deckGo(d){ const a=deckAvail(); if(!a.length) return; deckIdx=(deckIdx+d+a.length)%a.length; renderDeck(); refreshTiles(); }
 function deckSeek(){ const a=deckAvail(); const i=a.findIndex(ready); deckIdx = i>=0 ? i : 0; }
 function renderDeck(){
 	if(state.mode!=='deck') return;
 	const a = deckAvail();
 	const host = document.getElementById('dcard');
-	if(!a.length){ host.innerHTML='<div class="ddone">Every card is played.</div>'; document.getElementById('dcount').textContent=''; document.getElementById('dpips').innerHTML=''; return; }
+	if(!a.length){ host.innerHTML='<div class="ddone">This call is done.<br><br>Pick the next one.</div>'; document.getElementById('dcount').textContent=''; document.getElementById('dpips').innerHTML=''; return; }
 	deckIdx = ((deckIdx % a.length) + a.length) % a.length;
 	const p = a[deckIdx];
 	host.innerHTML=''; host.appendChild(tileNode(p, true, true));
 	document.getElementById('dcount').innerHTML =
-		`Card <b>${p.z}</b> of <b>${SORTED.length}</b> &nbsp;·&nbsp; Call <b>${p.row}</b> of <b>${ROWS.length}</b>`;
-	document.getElementById('dleft').textContent = a.length + ' left in the deck';
+		`Card <b>${callCards(p.row).indexOf(p)+1}</b> of <b>${callCards(p.row).length}</b> &nbsp;·&nbsp; Call <b>${p.row}</b> of <b>${ROWS.length}</b>`;
+	document.getElementById('dleft').textContent = a.length + ' left on this call';
 	document.getElementById('dpips').innerHTML = ROWS.map(r=>{
 		const k = state.passed.has(r.n) ? 'pass' : state.failedRows.has(r.n) ? 'fail' : (openRow()===r.n ? 'open' : '');
 		return `<i class="${k}" title="Call ${r.n} — ${r.label}"></i>`;
@@ -872,7 +899,7 @@ function drawDial(){
 		t.textContent = `${r.n} · ${r.label}`; d.appendChild(t);
 	});
 }
-function openRow(){ const g = PARTS.find(p=>p.gate && !state.placed.has(p.id)); return g ? g.row : 0; }
+function openRow(){ return state.call; }
 function refreshTiles(){
 	document.querySelectorAll('.tile').forEach(t=>{
 		const p = byId[t.dataset.id]; if(!p) return;
@@ -993,7 +1020,8 @@ function attempt(id, e){
 		state.placed.add(id); state.passed.add(p.row); state.failedRows.delete(p.row); stampGate(p,'pass');
 		say('pass', `<b>${ROWS[p.row-1].label}: CLOSED.</b> ${ROWS[p.row-1].sees}`);
 		closePeek();
-		if(p.row===NG) finish();
+		if(state.passed.size === NG) finish();
+		else setTimeout(()=>{ if(state.passed.size < NG) openPicker(); }, 1400);
 	} else {
 		state.placed.add(id); state.invoice += p.price||0;
 		say('', `<b>${p.short}</b>${p.price?` · $${p.price.toLocaleString()} on the ticket`:''}. ${p.law}`);
@@ -1028,13 +1056,13 @@ function finish(){
 }
 function resetAll(){
 	state.placed.clear(); state.passed.clear(); state.burned.clear(); state.failedRows.clear(); state.leaks=0; state.fails=0; state.sel=null; past.length=0;
-	state.invoice=0; state.ate=0;
+	state.invoice=0; state.ate=0; state.call=0;
 	document.getElementById('stamps').innerHTML=''; document.getElementById('done').classList.remove('on'); closePeek(); deckIdx=0;
-	say('', '<b>47 cards, 6 calls.</b> Drag the top card onto the house. Test before you replace — every time you reach for a part you have not proved is broken, it costs you.');
+	say('', '<b>Six calls on the board.</b> Pick one and work its deck. Test before you replace — every time you reach for a part you have not proved is broken, it costs you.');
 	redraw(); refreshTiles(); score();
 }
-document.getElementById('reset').addEventListener('click', resetAll);
-document.getElementById('again').addEventListener('click', resetAll);
+document.getElementById('reset').addEventListener('click', ()=>{ resetAll(); openPicker(); });
+document.getElementById('again').addEventListener('click', ()=>{ resetAll(); openPicker(); });
 
 /* ============================================================
    THE PEEK — the card, anchored to the tile, opening inward
@@ -1105,7 +1133,7 @@ stage.addEventListener('pointerover', e=>{
 	if(e.target.closest('.tile') || e.target.closest('#peek')) { clearTimeout(peekLeaveTimer); return; }
 	clearTimeout(peekLeaveTimer); peekLeaveTimer = setTimeout(()=>{ if(!peek.matches(':hover')) closePeek(); }, 500);
 });
-window.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closePeek(); document.getElementById('chart').classList.remove('on'); document.getElementById('rates').classList.remove('on'); } });
+window.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closePeek(); document.getElementById('chart').classList.remove('on'); document.getElementById('rates').classList.remove('on'); if(state.call) document.getElementById('board').classList.remove('on'); } });
 
 /* ============================================================
    THE CHART — the table itself, read-only, one click away
@@ -1147,6 +1175,49 @@ function buildRates(){
 	document.getElementById('rates').classList.add('on');
 }
 document.getElementById('showrates').addEventListener('click', buildRates);
+/* ============================================================
+   THE BOARD — six calls, six decks. You pick which one you are
+   standing in front of; the money runs across all of them.
+   ============================================================ */
+function callState(n){
+	const cards = callCards(n);
+	if(state.passed.has(n)) return ['closed','Closed'];
+	if(state.failedRows.has(n)) return ['back','Came back'];
+	if(cards.some(p=>state.placed.has(p.id))) return ['open','On it'];
+	return ['new','Not started'];
+}
+function openPicker(){
+	const grid = document.getElementById('bgrid');
+	grid.innerHTML = ROWS.map(r=>{
+		const [k, lab] = callState(r.n);
+		const done = callCards(r.n).filter(p=>state.placed.has(p.id)).length;
+		return `<button class="bcall ${k}" data-call="${r.n}">
+			<span class="bn">${r.n}</span>
+			<span class="bq">${r.code}</span>
+			<span class="bl">${r.label}</span>
+			<span class="bs">${lab}${k==='open'?` · ${done} of ${callCards(r.n).length} cards`:''}</span>
+		</button>`; }).join('');
+	grid.querySelectorAll('.bcall').forEach(b=>b.addEventListener('click', ()=>pickCall(+b.dataset.call)));
+	document.getElementById('btot').innerHTML =
+		`<b>${state.passed.size}</b> of ${NG} closed &nbsp;·&nbsp; <b>${state.fails}</b> callback${state.fails===1?'':'s'}`
+		+ ` &nbsp;·&nbsp; invoice <b>${money(state.invoice)}</b>`
+		+ (state.ate ? ` &nbsp;·&nbsp; <b class="bad">${money(state.ate)} eaten</b>` : '');
+	document.getElementById('board').classList.add('on');
+}
+function pickCall(n){
+	state.call = n; state.sel = null;
+	document.getElementById('board').classList.remove('on');
+	closePeek(); deckSeek(); renderDeck(); refreshTiles(); redraw(); score();
+	if(CAM[n]) flyTo.apply(null, CAM[n]);
+	const r = ROWS[n-1];
+	say('', state.passed.has(n) ? `<b>Call ${n} — ${r.label}.</b> Closed. ${r.sees}`
+		: `<b>Call ${n} — ${r.label}.</b> ${r.code} is what they said on the phone. Work the deck.`);
+}
+document.getElementById('showboard').addEventListener('click', openPicker);
+document.getElementById('boardclose').addEventListener('click', ()=>{
+	if(state.call) document.getElementById('board').classList.remove('on'); });
+document.getElementById('board').addEventListener('click', e=>{
+	if(e.target.id==='board' && state.call) e.currentTarget.classList.remove('on'); });
 document.getElementById('ratesclose').addEventListener('click', ()=>document.getElementById('rates').classList.remove('on'));
 document.getElementById('rates').addEventListener('click', e=>{ if(e.target.id==='rates') e.currentTarget.classList.remove('on'); });
 document.getElementById('chartclose').addEventListener('click', ()=>document.getElementById('chart').classList.remove('on'));
@@ -1991,8 +2062,7 @@ function redraw(){
    on gets to shout — everything you already closed keeps its pipe and loses its
    placard, or by call five the screen is a wall of numbers. */
 function callMarks(){
-	const open = PARTS.find(p=>p.gate && !state.placed.has(p.id));
-	const row = open ? open.row : ROWS.length;
+	const row = state.call;
 	PARTS.forEach(p=>{ const g = LG[p.layer]; if(!g) return;
 		g.traverse(o=>{ if(o.userData && o.userData.callmark) o.visible = (p.row === row); }); });
 }
@@ -2004,9 +2074,9 @@ function applyView(){
 	const lit = new Set();
 	if(v === 'fault'){
 		// everything you have already done on THIS call, plus what the proof checks
-		const open = PARTS.find(p=>p.gate && !state.placed.has(p.id));
-		const row = open ? open.row : ROWS.length;
+		const row = state.call || ROWS.length;
 		PARTS.filter(p=>p.row===row && state.placed.has(p.id)).forEach(p=>lit.add(p.layer));
+		const open = PARTS.find(p=>p.gate && p.row===row);
 		(open ? open.lit : []).forEach(x=>lit.add(x));
 	}
 	for(const name in MATS){
@@ -2165,4 +2235,5 @@ buildRing();
 if(window.THREE){ scene3d(); redraw(); }
 else { holder.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center;color:#9a9789;font-size:13px;line-height:1.5">The 3D house needs WebGL, and this browser will not start it.<br><br><a style="color:#d4a24c" href="../pipe/index.html">Open PLUMBING · Rough to Trim instead →</a></div>'; }
 score();
+openPicker();                                  // the day starts at the board, not in a room
 </script>
