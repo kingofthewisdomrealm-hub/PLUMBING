@@ -1,0 +1,2168 @@
+<title>PLUMBING · The Fixer</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+	--bg:#07080c; --panel:#0c0e14; --panel2:#15171f; --line:#252836;
+	--ink:#e8e4dc; --dim:#9a9789; --faint:#6d6b62;
+	--gold:#d4a24c; --sky:#6f92b8; --sage:#7fa07a; --rust:#c46a4a;
+	--paper:#f7f4ed; --paper2:#ece8df; --pink:#161410; --hair:#5c6370;
+	--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+	--serif:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;
+	--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,system-ui,sans-serif;
+	--tw:60px; --th:52px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px}
+button{font:inherit}
+button:focus-visible,.tile:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* ---------- the stage = the whole screen ---------- */
+#stage{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 50%,#1a2a3e 0%,#0b1119 46%,#07080c 80%);overflow:hidden;touch-action:none}
+#stage.over #housebox{box-shadow:0 0 0 3px var(--gold),0 0 60px rgba(212,162,76,.25)}
+#dial{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#dial .arc{fill:none;stroke:#2a2f3d;stroke-width:1.5}
+#dial .arc.pass{stroke:var(--sage);stroke-width:2.5}
+#dial .arc.fail{stroke:var(--rust);stroke-width:2.5}
+#dial .arc.open{stroke:var(--gold);stroke-width:2;stroke-dasharray:4 5}
+#dial .rl{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;fill:#6d6b62}
+#dial .rl.pass{fill:var(--sage)}#dial .rl.fail{fill:var(--rust)}#dial .rl.open{fill:var(--gold)}
+
+#housebox{position:absolute;border-radius:14px;transition:box-shadow .15s}
+#housebox canvas{width:100%;height:100%;display:block;border-radius:14px}
+#housebox{overflow:hidden;background:#0b1119}
+#stage.over #housebox canvas{cursor:copy}
+#msg{position:absolute;left:50%;transform:translateX(-50%);text-align:center;max-width:46ch;font-size:12px;line-height:1.4;color:var(--dim);pointer-events:none;text-wrap:balance}
+#msg b{color:var(--ink)}
+#msg.leak b{color:var(--sky)}#msg.pass b{color:var(--sage)}#msg.fail b{color:var(--rust)}
+
+/* corners */
+.corner{position:absolute;z-index:3;display:flex;flex-direction:column;gap:6px}
+#tl{left:14px;top:12px}
+#tr{right:14px;top:12px;align-items:flex-end}
+#bl{left:14px;bottom:12px}
+#br{right:14px;bottom:12px;align-items:flex-end}
+.brand{font-family:var(--serif);font-size:18px;line-height:1}
+.brand em{color:var(--gold);font-style:italic}
+.brand small{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin-top:4px}
+.toggle{display:inline-flex;background:rgba(21,23,31,.9);border:1px solid var(--line);border-radius:999px;padding:2px;width:max-content}
+.toggle button{background:none;border:0;color:var(--dim);font-size:11px;padding:4px 9px;border-radius:999px;cursor:pointer}
+.toggle button.on{background:var(--gold);color:#17140c;font-weight:600}
+button.ghost{background:rgba(21,23,31,.9);border:1px solid var(--line);color:var(--ink);padding:4px 10px;border-radius:999px;cursor:pointer;font-size:11px}
+button.ghost[disabled]{opacity:.32;cursor:not-allowed}
+#undo:not([disabled]){border-color:var(--gold);color:var(--gold)}
+.stamp{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;padding:2px 7px;border-radius:3px;border:1px solid var(--line);color:var(--faint);background:rgba(12,14,20,.8);width:max-content}
+.stamp.pass{border-color:var(--sage);color:var(--sage)}
+.stamp.fail{border-color:var(--rust);color:var(--rust)}
+#stamps{display:flex;flex-wrap:wrap;gap:3px;justify-content:flex-end;max-width:180px}
+.stamp.pass,.stamp.fail{padding:2px 3px}
+.score{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.score b{color:var(--ink);font-weight:600}
+.foot{font-size:9px;color:var(--faint);max-width:33ch;line-height:1.32}
+#br{pointer-events:none}
+.foot a{pointer-events:auto}
+.foot a{color:var(--gold)}
+
+/* ---------- the ring of tiles ---------- */
+/* ---------- the card face ---------- */
+.tile{position:absolute;z-index:4;width:var(--tw);height:var(--th);margin:0;display:flex;flex-direction:column;justify-content:space-between;border-radius:7px;padding:3px 5px 4px;border:1px solid var(--hair);color:var(--pink);text-align:left;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;transition:transform .15s,box-shadow .15s,opacity .2s;transform:translate(-50%,-50%);overflow:hidden}
+.tile .z{position:absolute;left:5px;top:2px;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;opacity:.92}
+.tile .st{position:absolute;right:4px;top:3px;font-family:var(--mono);font-size:9px;font-weight:700;line-height:1;opacity:.62}
+.tile .pic{display:block;height:26px;width:34px;margin:14px auto 0}
+.tile .nm{font-size:7.5px;line-height:1.1;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.tile .lk{position:absolute;right:4px;bottom:3px;font-size:8px;opacity:.7}
+.tile .fm{display:none}
+/* the big one in the deck */
+.tile.big{position:absolute;inset:0;width:auto;height:auto;transform:none;border-radius:11px;padding:11px 13px 13px;cursor:grab;box-shadow:0 14px 34px rgba(0,0,0,.55)}
+.tile.big:hover{transform:translateY(-2px)}
+.tile.big.ready{box-shadow:0 0 0 3px var(--gold),0 14px 34px rgba(0,0,0,.55)}
+.tile.big .z{left:12px;top:7px;font-size:40px;font-weight:700;opacity:.95}
+.tile.big .st{right:11px;top:11px;text-align:right;font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;opacity:.72;font-weight:500}
+.tile.big .st b{display:block;font-family:var(--sans);font-size:11px;letter-spacing:.02em;text-transform:none;margin-top:2px;opacity:.95}
+.tile.big .pic{height:78px;width:104px;margin:56px auto 0}
+.tile.big .nm{font-family:var(--serif);font-size:14.5px;line-height:1.25;white-space:normal;text-align:left;margin-top:10px;opacity:1}
+.tile.big .fm{display:block;font-size:8.5px;line-height:1.3;opacity:.62;margin-top:4px}
+.tile.big .lk{right:11px;bottom:9px;font-size:12px}
+.tile.big.spent::after,.tile.big.burned::after{right:11px;bottom:8px;font-size:18px}
+.tile.spent{background:var(--paper2)!important;color:#8a8578;border-color:#c9c3b5;cursor:default}
+.tile.spent::after{content:"✓";position:absolute;right:4px;bottom:3px;font-size:11px;color:#7fa07a}
+.tile.covered{opacity:.4;cursor:not-allowed}
+.tile.burned::after{content:"✗";position:absolute;right:4px;bottom:3px;font-size:11px;color:#c46a4a;font-weight:700}
+.tile.burned{border-color:#c46a4a}
+.tile.shake{animation:shake .4s}
+@keyframes shake{0%,100%{transform:translate(-50%,-50%)}20%{transform:translate(calc(-50% - 5px),-50%)}40%{transform:translate(calc(-50% + 5px),-50%)}60%{transform:translate(calc(-50% - 4px),-50%)}80%{transform:translate(calc(-50% + 4px),-50%)}}
+#ghost{position:fixed;z-index:50;pointer-events:none;width:var(--tw);height:var(--th);display:none;opacity:.95}
+#ghost .tile{position:static;transform:rotate(-4deg);box-shadow:0 18px 40px rgba(0,0,0,.6)}
+
+/* ---------- the peek (the card, anchored to the tile) ---------- */
+#peek{position:fixed;z-index:40;width:19rem;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;display:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px 12px;box-shadow:0 18px 50px rgba(0,0,0,.6)}
+#peek.on{display:block}
+#peek .bar{height:3px;width:30px;border-radius:99px;background:var(--gold);margin-bottom:8px}
+#peek .kick{font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);margin:0 0 2px}
+#peek .sym{font-family:var(--serif);font-size:30px;line-height:1;margin:0;color:var(--gold)}
+#peek h2{font-family:var(--serif);font-size:17px;font-weight:400;margin:3px 0 1px;line-height:1.2}
+#peek .meta{font-size:10px;color:var(--faint);margin:0 0 8px}
+#peek .law{font-size:13.5px;line-height:1.4;margin:0 0 9px;color:var(--ink)}
+.blk{border-left:3px solid var(--sage);background:#10151c;padding:7px 9px;margin-bottom:7px}
+.blk h3{margin:0 0 3px;font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;color:var(--sage)}
+.blk p{margin:0;font-size:11.5px;color:var(--dim);line-height:1.45}
+.blk a{color:var(--gold)}
+.blk.fail{border-left-color:var(--rust)}.blk.fail h3{color:var(--rust)}
+.blk.spec{border-left-color:var(--sky)}.blk.spec h3{color:var(--sky)}
+.blk.hot{border-left-color:var(--gold);background:#14110c}.blk.hot h3{color:var(--gold)}.blk.hot p{color:var(--ink)}
+.grade{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--dim);margin:1px 0 6px}
+.grade b{font-family:var(--sans);font-size:11px}
+.grade.g1{border-color:var(--sage);color:var(--sage)}.grade.g2{border-color:var(--sky);color:var(--sky)}.grade.g3,.grade.g5{border-color:var(--rust);color:var(--rust)}
+#peek .src{font-size:10px;color:var(--faint);margin:0 0 10px;line-height:1.4}
+.eat{background:var(--gold);border:0;color:#17140c;font-weight:700;padding:7px 13px;border-radius:999px;cursor:pointer;font-size:12px}
+#peek .close{position:absolute;right:8px;top:6px;background:none;border:0;color:var(--faint);font-size:16px;cursor:pointer;padding:2px 6px}
+
+/* ---------- the chart overlay (the table, read-only) ---------- */
+#chart{position:fixed;inset:0;z-index:30;display:none;background:rgba(7,8,12,.8);align-items:center;justify-content:center;padding:20px}
+#chart.on{display:flex}
+.paper{position:relative;background:var(--paper);border-radius:10px;padding:14px 14px 12px;color:var(--pink);max-width:min(66rem,100%);max-height:100%;overflow:auto;box-shadow:0 30px 80px rgba(0,0,0,.7)}
+.paper h2{margin:0 0 10px;text-align:center;font-size:10px;font-weight:500;letter-spacing:.28em;text-transform:uppercase;color:#6d6b62}
+.paper .close{position:absolute;right:8px;top:6px;background:none;border:0;color:#6d6b62;font-size:18px;cursor:pointer}
+.grid{display:grid;gap:2px}
+.fam{padding:0 2px 6px;text-align:center}
+.fam b{display:block;font-size:11px;font-weight:600}
+.fam span{display:block;font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:#6d6b62}
+.rowlab{display:flex;align-items:center;justify-content:flex-end;padding-right:5px}
+.rowlab span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#6d6b62;white-space:nowrap}
+.grid .tile{position:static;transform:none;width:auto;height:auto;min-height:3.4rem;cursor:default}
+.grid .tile:hover{transform:none;box-shadow:none}
+.grid .tile .nm{white-space:normal;font-size:8px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 4px 0;font-size:9.5px;color:#6d6b62}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:4px;border:1px solid var(--hair)}
+
+/* ---------- Covenant Builders ---------- */
+:root{--brand:#c4a574; --wordmark:#e9e7e2; --navy:#12182B}
+.lockup{display:flex;flex-direction:column;gap:3px;line-height:1}
+.lockup .row1{display:flex;align-items:center;gap:7px}
+.lockup .rule{height:1.5px;background:var(--brand);flex:1;min-width:26px;opacity:.85}
+.lockup svg{display:block;width:15px;height:13px;flex:none}
+.lockup .wm{font-family:var(--serif);font-size:12.5px;letter-spacing:.20em;color:var(--wordmark);text-transform:uppercase;white-space:nowrap}
+.lockup .wd{font-family:var(--sans);font-size:7.5px;letter-spacing:.34em;color:var(--brand);text-transform:uppercase;text-align:center}
+.appname{font-family:var(--serif);font-size:16px;line-height:1;margin-top:7px;color:var(--ink)}
+.appname em{color:var(--gold);font-style:italic}
+.appname small{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.17em;text-transform:uppercase;color:var(--faint);margin-top:4px}
+.foot b{color:var(--brand);font-weight:600}
+
+/* ---------- the deck ---------- */
+#deck{position:absolute;z-index:5;width:246px;display:flex;flex-direction:column;align-items:center;gap:9px;
+	background:rgba(10,12,18,.72);border:1px solid var(--line);border-radius:16px;padding:14px 13px 13px}
+#deck.ready{border-color:rgba(212,162,76,.55)}
+#dside{display:flex;flex-direction:column;align-items:center;gap:8px}
+#dwrap{position:relative;width:186px;height:250px}
+#dwrap .edge{position:absolute;inset:0;border-radius:11px;background:var(--paper2);border:1px solid var(--hair);opacity:.5}
+#dwrap .edge:nth-child(1){transform:translate(9px,9px) rotate(2.6deg)}
+#dwrap .edge:nth-child(2){transform:translate(5px,5px) rotate(1.3deg)}
+#dcard{position:absolute;inset:0}
+#dcard .ddone{display:flex;align-items:center;justify-content:center;height:100%;border:1px dashed var(--line);border-radius:11px;color:var(--dim);font-size:12px;text-align:center;padding:16px}
+.dnav{display:flex;align-items:center;gap:9px}
+.dnav button{width:30px;height:26px;padding:0;font-size:12px}
+#dcount{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+#dcount b{color:var(--ink);font-size:12.5px}
+#dleft{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+#dpips{display:flex;gap:4px}
+#dpips i{width:13px;height:5px;border-radius:99px;background:#2a2f3d}
+#dpips i.pass{background:var(--sage)}#dpips i.fail{background:var(--rust)}#dpips i.open{background:var(--gold)}
+#dall{font-size:10.5px}
+@media (max-width:760px){
+	#deck{flex-direction:row;align-items:center;gap:12px;width:auto;padding:10px 12px}
+	#dwrap{width:132px;height:176px}
+	#dside{align-items:flex-start;gap:7px}
+	#dcount{white-space:normal;line-height:1.5}
+	#dleft{display:none}
+	.tile.big{padding:8px 9px 9px}
+	.tile.big .z{font-size:27px;left:9px;top:5px}
+	.tile.big .st{font-size:7px;right:8px;top:7px}
+	.tile.big .st{max-width:58px}
+	.tile.big .st b{display:none}
+	.tile.big .pic{height:48px;width:66px;margin:34px auto 0}
+	.tile.big .nm{font-size:11px;margin-top:7px}
+	.tile.big .fm{display:none}
+	#bl{top:124px;bottom:auto}
+	#msg{max-width:34ch;font-size:11.5px}
+}
+#stage.deckmode .tile:not(.big){display:none}
+#stage.deckmode #dial{display:none}
+
+/* ---------- done ---------- */
+#done{display:none;position:fixed;inset:0;z-index:45;background:rgba(7,8,12,.88);align-items:center;justify-content:center;text-align:center;padding:24px}
+#done.on{display:flex}
+#done h2{font-family:var(--serif);font-weight:400;font-size:36px;margin:0 0 6px;color:#fff;text-wrap:balance}
+#done .stars{font-size:26px;color:var(--gold);letter-spacing:.2em;margin-bottom:8px}
+#done p{color:var(--dim);max-width:44ch;margin:0 auto 14px;line-height:1.5}
+#done p b{color:var(--ink)}
+.drip{animation:drip 1.1s ease-in forwards}
+@keyframes drip{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(60px)}}
+.bandlab{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;fill:#9a9789}
+@media (max-width:760px){:root{--tw:44px;--th:40px}.tile .z{font-size:10px}#dial .rl{display:none}.tile.big .nm{display:block}.tile .sym{font-size:15px}.tile .nm{display:none}.brand small,.foot{display:none}.toggle button{font-size:10px;padding:3px 7px}#stamps{display:none}}
+@media (prefers-reduced-motion:reduce){.tile,.drip,.tile.shake{animation:none;transition:none}}
+/* ---------- the money ---------- */
+.tile .pz{position:absolute;left:5px;bottom:3px;font-family:var(--mono);font-size:7.5px;font-weight:700;opacity:.8}
+.tile.big .pz{left:13px;bottom:11px;font-size:17px;letter-spacing:.01em;opacity:.9}
+.tile .bigc{display:none}
+.tile.big .fm{margin-bottom:22px}
+.tile.big .bigc{display:block;position:absolute;right:11px;bottom:13px;font-family:var(--mono);font-size:7px;letter-spacing:.16em;
+	padding:2px 6px;border-radius:99px;background:#12182B;color:#c4a574}
+.bigc{font-family:var(--mono);font-size:8px;letter-spacing:.16em;padding:2px 6px;border-radius:99px;background:#12182B;color:#c4a574;white-space:nowrap}
+#score .bad{color:var(--rust)}
+/* ---------- the rates sheet ---------- */
+#rates{position:fixed;inset:0;z-index:32;display:none;background:rgba(7,8,12,.82);align-items:center;justify-content:center;padding:20px}
+#rates.on{display:flex}
+#rates .paper{max-width:min(54rem,100%)}
+.rlede{font-size:12.5px;line-height:1.55;color:#4f4c46;margin:0 0 14px;max-width:60ch}
+.rtable{display:flex;flex-direction:column}
+.rrow{display:grid;grid-template-columns:minmax(0,1.1fr) 10rem minmax(0,1.45fr);gap:14px;padding:7px 6px;border-top:1px solid #ddd7c9;align-items:baseline}
+.rrow.rbig{background:#fbf4e3}
+.rjob{font-family:var(--serif);font-size:14px;color:#161410}
+.rjob i{font-style:normal;font-size:10.5px;color:#6d6b62}
+.rnum{font-family:var(--mono);font-size:13.5px;font-weight:700;color:#161410;text-align:right;white-space:nowrap}
+.rbig .rnum{color:#8a5a12}
+.rnote{font-size:10.5px;line-height:1.45;color:#5c584f}
+.rsrc{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;color:#8a857a;margin-top:3px}
+.rsrc2{font-family:var(--mono);font-size:9px;line-height:1.5;color:#6d6b62;margin:10px 4px 0;max-width:70ch}
+.rh{font-family:var(--serif);font-weight:400;font-size:15px;margin:18px 0 2px;color:#161410}
+@media (max-width:760px){.rrow{grid-template-columns:1fr auto;}.rnote{grid-column:1/-1}}
+</style>
+
+<div id="stage" aria-label="The 3D house, with every service call around it">
+	<svg id="dial" aria-hidden="true"></svg>
+	<div id="housebox"></div>
+	<p id="msg"><b>47 cards, 6 calls.</b> Drag the top card onto the house. Test before you replace — every time you reach for a part you have not proved is broken, it costs you.</p>
+
+	<div class="corner" id="tl">
+		<div class="lockup" aria-label="Covenant Builders">
+			<div class="row1"><span class="rule"></span><svg viewBox="0 0 147 121" aria-hidden="true"><path d="M11,116 L2,55 L45,66 L73,3 L101,66 L145,55 L136,116 Z" fill="none" stroke="var(--brand)" stroke-width="13" stroke-linejoin="miter"/></svg><span class="rule"></span></div>
+			<div class="wm">Covenant Builders</div><div class="wd">We Deliver</div>
+		</div>
+		<div class="appname">PLUMBING <em>The Fixer</em><small>The same house, five years later · six calls</small></div>
+		<div class="toggle" role="tablist" aria-label="View">
+			<button data-view="xray" class="on">X-ray</button>
+			<button data-view="room">Room</button>
+			<button data-view="fault">The fault</button>
+		</div>
+	</div>
+	<div class="corner" id="tr"><div id="stamps"></div></div>
+	<div class="corner" id="bl">
+		<span class="score" id="score">Calls 0/6 · Callbacks 0 · Ate $0 · Invoice $0</span>
+		<div style="display:flex;gap:6px;flex-wrap:wrap;max-width:60vw"><button class="ghost" id="undo" disabled title="Take the last step back (Ctrl+Z)">&#8630; Reverse</button><button class="ghost" id="dall"></button><button class="ghost" id="reset">Start over</button><button class="ghost" id="showrates">Rates</button><button class="ghost" id="showchart">The table</button></div>
+	</div>
+	<div class="corner" id="br"><span class="foot"><b>Covenant Builders</b> · CBC1253676 · (772) 473-7115<br>Vero Beach · Sebastian · Fort Pierce · Port St. Lucie · Fellsmere · Hablamos español<br>Rates are a Treasure Coast market range for 2026, not a quote — open <b>Rates</b> for every number and its source. Water tiers from the <a href="https://indianriver.gov/Rate%20booklet%20Jan%202025.pdf" target="_blank" rel="noopener">Indian River County utility rate booklet</a>. Code from FBC — Plumbing, 8th Ed. A training model, not a price list.</span></div>
+</div>
+
+<div id="deck" aria-label="The deck of build cards">
+	<div id="dwrap"><div class="edge"></div><div class="edge"></div><div id="dcard"></div></div>
+	<div id="dside">
+		<div class="dnav"><button class="ghost" id="dprev" aria-label="Previous card">&#9664;</button><span id="dcount"></span><button class="ghost" id="dnext" aria-label="Next card">&#9654;</button></div>
+		<div id="dpips" aria-label="The six calls"></div>
+		<div id="dleft"></div>
+	</div>
+</div>
+
+<div id="peek" role="dialog" aria-label="Part card"><button class="close" id="peekclose" aria-label="Close">×</button><div id="peekbody"></div></div>
+<div id="chart" role="dialog" aria-label="Periodic Table of the Service Call"><div class="paper"><button class="close" id="chartclose" aria-label="Close">×</button><h2>Periodic Table of the Service Call — the data behind the ring</h2><div class="grid" id="table"></div><div class="legend" id="legend"></div></div></div>
+<div id="rates" role="dialog" aria-label="Treasure Coast plumbing rates"><div class="paper"><button class="close" id="ratesclose" aria-label="Close">×</button>
+	<h2>What it goes for on the Treasure Coast — 2026</h2><div id="ratebody"></div></div></div>
+<div id="done"><div><div class="stars" id="d-stars"></div><h2 id="d-title"></h2><p id="d-body"></p><button class="eat" id="again">Run the day again</button></div></div>
+<div id="ghost"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script>
+/* ============================================================
+   DATA — the table. Hue lives on the family. Order lives on
+   `needs`. If you write  if(part.id==='block')  the engine is dead.
+   ============================================================ */
+const FAMS = [
+	{id:'ca', sym:'Ca', label:'Call', q:'What did they actually say?', hue:'#efe6cf', hueTo:'#d7c79b', block:1},
+	{id:'lk', sym:'Lk', label:'Look', q:'What do you check before you touch anything?', hue:'#cfe0ef', hueTo:'#7096bd', block:2},
+	{id:'fd', sym:'Fd', label:'Find', q:'What is actually wrong?', hue:'#f4dd97', hueTo:'#cfa32f', block:2},
+	{id:'fx', sym:'Fx', label:'Fix', q:'What do you replace, and what do you leave alone?', hue:'#d3e6d0', hueTo:'#7fa07a', block:3},
+	{id:'tl', sym:'Tl', label:'Tell', q:'What do you tell them is coming?', hue:'#e8ddc9', hueTo:'#c4a574', block:4},
+	{id:'pr', sym:'Pr', label:'Prove', q:'How do they know it is fixed?', hue:'#cfe6e2', hueTo:'#6fa8a0', block:4},
+];
+const ROWS = [
+	{n:1, code:'“It won’t stop”',      label:'Running toilet', sees:'A dyed tank, a clear bowl fifteen minutes later, and a homeowner who knows what it was costing.'},
+	{n:2, code:'“It won’t drain”',     label:'Kitchen sink',   sees:'Both bowls full, both stoppers pulled at once, and the water gone before you are.'},
+	{n:3, code:'“No hot water”',       label:'Hot water',      sees:'The far shower still at 120 degrees after fifteen minutes.'},
+	{n:4, code:'“It’s dripping”',      label:'Dripping pipe',  sees:'The heater through a full cycle and the gauge not moving.'},
+	{n:5, code:'“It stinks”',          label:'Sewer smell',    sees:'A wet trap, a solid toilet, six flushes, and nothing on the air.'},
+	{n:6, code:'“It’s backing up”',    label:'Backing up',     sees:'Every fixture in the house running at once and the cleanout staying empty.'},
+];
+const GRADES = {
+	'1':['✓','Robust','A published rate, a code section, or the utility’s own table.'],
+	'2':['~','Range','Real, but it is a market range — confirm against your own sub’s number.'],
+	'3':['⚠','Contested','Plumbers argue about it. Both shown.'],
+	'4':['◈','Model','Simplified for the sim.'],
+	'5':['✗','Cartoon','The shortcut. It looked fixed until the phone rang again.'],
+};
+const SRC_R = 'Market range, Florida / Treasure Coast 2026 — Space Coast Cooling FL plumber cost guide, homeyou Vero Beach, HomeGuide';
+const SRC_W = 'Indian River County Dept. of Utility Services rate booklet, eff. 1 Jan 2025';
+const SRC_P = 'FBC — Plumbing, 8th Ed. (2023)';
+const BUILD_URL = '../pipe/index.html';
+
+/* ============================================================
+   THE RATES — every number in the deck, in one table, so the
+   sheet and the cards can never disagree. `big` = flag it.
+   ============================================================ */
+const RATES = [
+	{job:'Sewer line replaced or lined', lo:2000, hi:10000, unit:'a 40 ft run', big:1,
+		note:'$50 to $250 a foot open-cut. Trenchless bursting $60 to $200 a foot; CIPP lining $90 to $250 a foot. Concrete removal adds $3 to $8 a square foot.', src:'HomeGuide sewer line 2026'},
+	{job:'Whole-house repipe in PEX', lo:3000, hi:7000, unit:'1,500 sq ft, 2 bath', big:1,
+		note:'The Florida figure for 1,500 sq ft is $4,180 to $5,403. PEX runs $3 to $6 a foot installed; copper type L $8 to $15.', src:'PlumbingPriceGuide / Space Coast 2026'},
+	{job:'Two-way cleanout installed', lo:2000, hi:5000, unit:'', big:1,
+		note:'This is what it costs to add the thing the builder should have stood at the property line on day one.', src:'HomeGuide sewer 2026'},
+	{job:'Slab leak rerouted overhead', lo:1500, hi:4000, unit:'', big:1,
+		note:'Spot repair through the slab $500 to $2,000. Tunnelling under it $2,000 to $6,000. Finding it first: $150 to $400.', src:'PlumbingPriceGuide 2026'},
+	{job:'Water heater replaced — 50 gal electric', lo:1200, hi:2400, unit:'installed', big:1,
+		note:'Permit $50 to $200. Expansion tank $80 to $150 installed. A heat-pump unit runs $2,500 to $4,400.', src:'WaterHeaterReplaceCost Florida 2026'},
+	{job:'Hydro jetting the main', lo:600, hi:1400, unit:'', big:1,
+		note:'Buys you twelve to twenty-four months on roots. It does not fix roots.', src:'HomeGuide 2026'},
+	{job:'Pressure reducing valve replaced', lo:300, hi:650, unit:'installed', big:0,
+		note:'Average $475. Labour alone $225 to $450. Check it any time static reads over 80 psi.', src:'HomeGuide 2026'},
+	{job:'Toilet replaced', lo:350, hi:800, unit:'installed', big:0,
+		note:'Labour $150 to $450 plus a $200 to $350 bowl. High-efficiency runs $800 to $1,500 installed.', src:'HomeGuide 2026'},
+	{job:'Main line cabled, root cutter', lo:200, hi:500, unit:'', big:0,
+		note:'Roots add another $200 to $600 on top.', src:'HomeGuide 2026'},
+	{job:'Garbage disposal replaced', lo:200, hi:550, unit:'installed', big:0,
+		note:'Most people pay $300 to $450.', src:'Modernize 2026'},
+	{job:'Sewer camera inspection', lo:125, hi:500, unit:'', big:0,
+		note:'The Florida figure is about $265. Some shops fold it into a flat-rate main-line price.', src:'Angi / Space Coast 2026'},
+	{job:'Water heater element or thermostat', lo:100, hi:350, unit:'each', big:0,
+		note:'Dip tube $100 to $300. T&P valve $50 to $300. Flush $75 to $250. The average water-heater repair is $455.', src:'HomeGuide water heater repair 2026'},
+	{job:'Toilet reset on a new wax seal', lo:200, hi:260, unit:'about $230', big:0,
+		note:'A broken flange adds $85 to $350.', src:'HomeGuide 2026'},
+	{job:'Drain cleaning', lo:119, hi:146, unit:'Florida average $132', big:0,
+		note:'Across all drains the spread is $50 to $450 depending on where you have to get in.', src:'Space Coast / homeyou Vero Beach 2026'},
+	{job:'Toilet unclogged', lo:100, hi:275, unit:'', big:0, note:'', src:'HomeGuide 2026'},
+	{job:'Fill valve or flapper replaced', lo:70, hi:150, unit:'', big:0,
+		note:'The parts are $12 to $60. Everything else on that line is you getting there and knowing which one it was.', src:'HomeGuide 2026'},
+	{job:'Service call / diagnostic', lo:50, hi:200, unit:'Vero call-in $70 to $170', big:0,
+		note:'Most shops credit it against the work. This deck bills it at $95.', src:'Space Coast / homeyou Vero Beach 2026'},
+	{job:'Labour, standard hour', lo:75, hi:150, unit:'per hour', big:0,
+		note:'The Florida average labour rate is $74.81. A master plumber is $100 to $200. After hours is $125 to $170.', src:'Space Coast Cooling Florida 2026'},
+];
+/* what the county charges for the water a leak wastes */
+const WATER = [
+	['Water — base, single family', '$11.13 a month'],
+	['Water — first 4,000 gal', '$2.80 per 1,000'],
+	['Water — 4,001 to 7,000', '$3.27 per 1,000'],
+	['Water — 7,001 to 12,000', '$6.31 per 1,000'],
+	['Water — over 12,000', '$12.42 per 1,000'],
+	['Sewer — base, single family', '$21.99 a month'],
+	['Sewer — first 12,000 gal', '$4.03 per 1,000'],
+	['Sewer — over 12,000', '$6.04 per 1,000'],
+];
+const CALLFEE = 95;
+
+const PARTS = [
+	/* ================= CALL 1 — “It won’t stop” ================= */
+	{id:'c1', z:1, sym:'C1', art:'phone', name:'Take the call and ask the two questions', short:'Take the call', fam:'ca', row:1, needs:[], price:CALLFEE,
+		law:'The homeowner tells you the symptom. They do not tell you the problem, because they do not know it.',
+		spec:'You ask two things before it goes on the board. One: does it run all the time, or does it run for thirty seconds every few hours on its own? Two: has the water bill moved? A constant run is a flapper or a seat. A run every few hours is a silent leak refilling the tank, and that one is the expensive one because nobody hears it. You book it as a diagnostic, and you say the $95 out loud on the phone.',
+		fail:'Take “my toilet is broken” at face value and you show up with a wax ring and a bowl on the truck for a five-dollar flapper.',
+		grade:'2', src:SRC_R+' — a Florida service call runs $50 to $200, a Vero call-in $70 to $170. Most shops credit it against the work.', layer:'c1'},
+	{id:'l1a', z:2, sym:'L1', art:'tank', name:'Take the lid off and watch the tank', short:'Watch the tank', fam:'lk', row:1, needs:['c1'], price:0,
+		law:'Two parts can make the same noise. Only one of them is wrong.',
+		spec:'You take the lid off and you stand there. If water is running over the top of the overflow tube, the fill valve is not shutting off and the level is set too high. If the level sits still and you can see the bowl surface moving, water is getting past the flapper. Do not touch a screwdriver until you know which of those two you are looking at.',
+		fail:'Guess wrong and you replace a fill valve that was fine, and the toilet still runs while you are packing the truck.',
+		grade:'1', src:'The overflow tube is the tell. If it is at the tube, it is the fill valve; if the level holds, it is the seal.', layer:'l1a'},
+	{id:'l1b', z:3, sym:'L2', art:'dye', name:'Drop dye in the tank and walk away for fifteen minutes', short:'Dye test', fam:'lk', row:1, needs:['l1a'], price:0,
+		law:'A silent leak has to be made visible before anybody will pay to stop it.',
+		spec:'You drop a dye tab or ten drops of food colouring in the tank and you tell them nobody flushes it. You go look at the water heater while you wait. Fifteen minutes later you come back: colour in the bowl means water is crossing the flapper. No colour and the tank still filling means the fill valve. Take a photo of the coloured bowl — that photo is what sells the repair.',
+		fail:'Skip the dye and you are arguing with a homeowner about whether a toilet they cannot hear is leaking.',
+		grade:'1', src:'EPA WaterSense: the average household wastes more than 9,300 gallons a year to leaks, and nine percent of homes leak 50 gallons or more a day.', layer:'l1b'},
+	{id:'f1', z:4, sym:'F1', art:'flapper', name:'Find it: the flapper is shot and the seat is pitted', short:'Flapper and seat', fam:'fd', row:1, needs:['l1b'], price:0,
+		law:'The part that failed and the reason it failed are two different findings. Report both.',
+		spec:'You shut the stop, you flush it down, and you run a finger around the flush-valve seat. The flapper is soft and the rubber comes off on your hand. The seat has a rough ring on it. Then you look in the tank and find the blue tablet basket — the in-tank bleach tablet ate both of them. You write down both findings, because the second one is the reason the first one happened.',
+		fail:'Report the flapper and not the tablets and you will be back for the flapper you just installed.',
+		grade:'1', src:'In-tank chlorine tablets attack rubber and the flush-valve seat. Every major toilet manufacturer voids the warranty over them.', layer:'f1'},
+	{id:'x1', z:5, sym:'X1', art:'flapperNew', name:'Change the flapper and the seat, and take the tablets out', short:'Flapper + seat', fam:'fx', row:1, needs:['f1'], price:145,
+		law:'A new seal against a pitted seat is a new seal that leaks.',
+		spec:'You put in the flapper the manufacturer lists for that flush valve, not the universal one that nearly fits. You dress the seat or you fit a seat repair kit. You set the water level an inch below the top of the overflow tube and you mark that line. Then you take the tablet basket out of the tank, hand it to them, and tell them why it is going in the bin.',
+		fail:'Fit a universal flapper on a 3 in. flush valve and it will hang up open about once a week, which is worse than what they called you for.',
+		grade:'2', src:SRC_R+' — a fill valve or flapper replacement runs $70 to $150. Parts alone are $12 to $60; the rest is getting there and knowing which one.', layer:'x1'},
+	{id:'x1t', z:5, sym:'Z1', art:'flapper', name:'Change the flapper and go', short:'Flapper only', fam:'fx', row:1, needs:['f1'], trap:true, altOf:'x1', price:95,
+		law:'Ten minutes, five-dollar part, out the door. That is the whole argument.',
+		spec:'You have a universal flapper on the truck and four more calls today. You drop it in, you flush it twice, the running stops, you write the ticket for $95 and you are gone in ten minutes. The seat is still pitted. The tablet is still in the tank. The homeowner is happy and so are you.',
+		fail:'A new flapper seals against a pitted seat for about three weeks. Then it weeps again, and this time she does not call you — she calls whoever is first in the search results, and he finds the tablet basket you left in the tank.',
+		grade:'5', src:'A flush-valve seat that is pitted enough to leak will not seal against any flapper. The seat gets dressed or the valve gets replaced.', layer:'x1t'},
+	{id:'t1', z:6, sym:'T1', art:'bill', name:'Show her what it was costing', short:'The bill math', fam:'tl', row:1, needs:['x1|x1t'], price:0, big:true,
+		law:'A leak does not cost them the cheap water. It costs them the most expensive water they buy.',
+		spec:'You do the arithmetic in front of her. A running toilet at 200 gallons a day adds about 6,000 gallons a month. Indian River County does not bill that at the bottom rate — a house that normally uses 5,000 gallons gets pushed up the tiers, so most of that 6,000 lands at $6.31 for water plus $4.03 for sewer, and anything over 12,000 gallons a month is $12.42 plus $6.04. That is roughly <b>$56 a month, about $670 a year</b>, for a part that costs twelve dollars. Show her the tier table on her own bill.',
+		fail:'Hand her a ticket with no arithmetic on it and the $145 looks expensive. Hand her the arithmetic and the $145 looks like a refund.',
+		grade:'2', src:SRC_W+' — water $2.80 / $3.27 / $6.31 / $12.42 per 1,000 gal by tier, sewer $4.03 / $6.04. The 200 gallons a day is a working figure, not a measurement — read her actual bill.', layer:'t1'},
+	{id:'p1', z:7, sym:'P1', art:'tick', name:'Dye it again and hand it back', short:'Prove it', fam:'pr', row:1, gate:1, needs:['t1'], failsIf:['x1t'], price:0,
+		law:'You do not get to say it is fixed. The test says it is fixed.',
+		spec:'You drop a second dye tab in, you set a timer for fifteen minutes on your phone in front of her, and you finish the paperwork while it sits. At fifteen minutes the bowl is clear. You show her the clear bowl next to the photo of the coloured one, you show her the water line you marked, and you tell her to call you if she ever hears it run on its own again.',
+		fail:'Leave before the second test and the only person who knows whether you fixed it is her, four weeks from now, with a bill in her hand.',
+		grade:'1', src:'Same dye test as the diagnosis, run as the proof. It costs you fifteen minutes of paperwork time.', layer:'p1', lit:['x1','t1','p1']},
+
+	/* ================= CALL 2 — “It won’t drain” ================= */
+	{id:'c2', z:8, sym:'C2', art:'phone', name:'Ask what went down it and when it changed', short:'Take the call', fam:'ca', row:2, needs:['p1'], price:CALLFEE,
+		law:'A drain that got slow over months and a drain that stopped on Sunday are two different jobs.',
+		spec:'You ask what they put down it — grease, rice, coffee grounds, a disposal that gets everything. Then you ask whether it got slow gradually or stopped all at once. Gradual is a coating building up in the branch. All at once is an object, or it is the main and the kitchen is just where it showed first. You also ask whether anything else in the house is slow, because that answer changes which truck you send.',
+		fail:'Roll a hand auger for what turns out to be the main line and you are driving back for the big machine.',
+		grade:'2', src:SRC_R+' — Florida drain cleaning averages $132, with the full spread $50 to $450 depending on where you have to get in.', layer:'c2'},
+	{id:'l2a', z:9, sym:'L3', art:'drops', name:'Run every other fixture before you touch the sink', short:'Run the others', fam:'lk', row:2, needs:['c2'], price:0,
+		law:'One slow fixture is a branch. Two slow fixtures on different walls is the main.',
+		spec:'You fill the tub and pull it. You flush both toilets. You run the laundry standpipe. If everything else clears fast and only the kitchen is slow, the blockage is in the kitchen branch and you can work from the cabinet and the cleanout. If a toilet gurgles when the tub drains, stop — you are on the main and this is a different call.',
+		fail:'Cable a kitchen branch for an hour while the real blockage is 40 ft out in the main, and everything you push goes into it.',
+		grade:'1', src:'Two fixtures on separate branches sharing a symptom means the fault is downstream of both.', layer:'l2a'},
+	{id:'l2b', z:10, sym:'L4', art:'trap', name:'Open the cabinet and read the trap arm', short:'Read the trap', fam:'lk', row:2, needs:['l2a'], price:0,
+		law:'Half the kitchen drains in Florida were rebuilt by the homeowner and nobody told the code.',
+		spec:'You open the doors and you look before you put a bucket under anything. You are looking for corrugated flex tubing on the trap arm, an S-trap dropping straight through the floor, a disposal dumping into a 1½ in. line with a long flat run, and a dishwasher hose taped to the floor instead of looped high. Every one of those makes a clog and every one of them is a separate line on the ticket.',
+		fail:'Cable it clean, leave the flex tubing in place, and it clogs again by Christmas — in the exact spot you just cleared.',
+		grade:'1', src:SRC_P+' 1002 (no S-traps, no corrugated tubing on a trap arm) and 802 (the dishwasher discharges indirectly, through an air gap or a high loop).', layer:'l2b'},
+	{id:'f2', z:11, sym:'F2', art:'grease', name:'Find it: grease in the branch, about eight feet out', short:'Grease in the branch', fam:'fd', row:2, needs:['l2b'], price:0,
+		law:'The trap is where you can see. It is almost never where it is.',
+		spec:'You pull the trap and it is clean. You put the hand snake in and it goes free for six feet and then stops soft. Soft means grease, not an object — an object stops hard and you feel it. You pull the cable back and it comes out coated white. That tells you the blockage is in the horizontal branch, past the trap, and it is a coating, so a hole through it is not a fix.',
+		fail:'Call a clean trap a clean drain and you have proved nothing except that the trap is clean.',
+		grade:'1', src:'Field diagnosis: soft resistance and a coated cable is grease. Hard resistance is an object.', layer:'f2'},
+	{id:'x2', z:12, sym:'X2', art:'cable', name:'Cable the whole branch from the cleanout and flush it hot', short:'Cable the branch', fam:'fx', row:2, needs:['f2'], price:265,
+		law:'Cut the coating off the wall of the pipe, or you have only made a hole in it.',
+		spec:'You open the branch cleanout instead of working through the trap opening, because from the cleanout you can get a full-size cutter head in and pull it back along the pipe wall. You run the cable the full length of the branch, you pull it back cutting, and you do that twice. Then you run the hot tap wide open for ten minutes to carry what you cut. You put the trap back with slip joints and tubular, not flex.',
+		fail:'Work through the trap opening with a hand auger and the biggest head you can fit is smaller than the pipe. You will punch a hole and leave the walls coated.',
+		grade:'2', src:SRC_R+' — drain cleaning averages $132 in Florida; a branch cleared properly from the cleanout with the trap rebuilt sits at the top of the $119 to $146 band and above.', layer:'x2'},
+	{id:'x2t', z:12, sym:'Z2', art:'auger', name:'Punch it through with the hand auger and call it done', short:'Punch it through', fam:'fx', row:2, needs:['f2'], trap:true, altOf:'x2', price:145,
+		law:'The water goes down. Everybody in the kitchen claps. You are the hero for about five weeks.',
+		spec:'You have the hand auger in the trap opening already and the cleanout is behind the dishwasher. You run the quarter-inch cable out, you feel it break through, and the standing water in the sink spins away. You run the tap for thirty seconds, it drains, you write $145 and you make your next call on time.',
+		fail:'You made a pencil-sized hole through a grease plug and left the pipe walls coated the whole way. It closes back in about five weeks, and the second call is the one where she asks why she is paying twice.',
+		grade:'5', src:'A hole through a blockage restores flow without removing the cause. The cause is on the pipe wall and only a full-size cutter pulled back reaches it.', layer:'x2t'},
+	{id:'t2', z:13, sym:'T2', art:'bill', name:'Tell them why it happened and what the next step costs', short:'What is next', fam:'tl', row:2, needs:['x2|x2t'], price:0, big:true,
+		law:'They think the drain failed. The drain did exactly what you would expect. Say so.',
+		spec:'You tell them plainly: grease goes in liquid and comes out solid, the disposal is not a garbage can, and a can under the sink for the pan drippings is the whole fix. Then you give them the two real numbers so nothing is a surprise later — if it comes back, <b>jetting the line is $600 to $1,400</b>, and if they want the disposal replaced while the cabinet is open it is <b>$200 to $550 installed, most people pay $300 to $450</b>.',
+		fail:'Say nothing and the same call comes back in eighteen months, and this time it is your fault in her mind.',
+		grade:'2', src:SRC_R+' — hydro jetting $600 to $1,400 (HomeGuide 2026); garbage disposal replaced $200 to $550 installed (Modernize 2026).', layer:'t2'},
+	{id:'p2', z:14, sym:'P2', art:'tick', name:'Fill both bowls and pull both stoppers at once', short:'Prove it', fam:'pr', row:2, gate:2, needs:['t2'], failsIf:['x2t'], price:0,
+		law:'A drain that passes a trickle is not a drain that passes a sink.',
+		spec:'You plug both bowls, you fill them both to the rim, and you pull both stoppers at the same time while she watches. That is the most water that drain will ever see and it has to take it without backing into the other bowl. Then you run the disposal with the cold tap for a minute and you check under the cabinet with a dry hand.',
+		fail:'Test it with a running tap and you have tested a trickle. The first real sinkful is the actual test, and you want to be standing there for it.',
+		grade:'1', src:'Both bowls at once is the design load on a kitchen branch. Anything less does not prove the line.', layer:'p2', lit:['x2','t2','p2']},
+
+	/* ================= CALL 3 — “No hot water” ================= */
+	{id:'c3', z:15, sym:'C3', art:'phone', name:'Ask how old it is and whether it is none or not enough', short:'Take the call', fam:'ca', row:3, needs:['p2'], price:CALLFEE,
+		law:'No hot water at all and warm-then-cold are different faults in the same box.',
+		spec:'You ask three things. How old is the heater — if they do not know, you will read the serial on site. Is there no hot water at all, or does it start hot and go cold partway through the second shower? And has the breaker tripped. None at all points at the upper element, the upper thermostat or a tripped high-limit. Warm then cold points at the lower element, which is the classic. Warm but never hot points at a thermostat.',
+		fail:'Load a new water heater on the truck before you have read a single ohm and you will sell one whether it needed it or not.',
+		grade:'1', src:'Upper element heats the top third; the lower element heats the rest. Which one is dead is written in which part of the shower goes cold.', layer:'c3'},
+	{id:'l3a', z:16, sym:'L5', art:'breaker', name:'Kill the breaker and prove it is dead before a cover comes off', short:'Kill the breaker', fam:'lk', row:3, needs:['c3'], price:0,
+		law:'There are 240 volts behind that panel and the tank does not care that you are in a hurry.',
+		spec:'You switch the breaker off at the panel, you tape it, and then you put a meter on the element terminals and prove there is nothing there. You do not trust the switch and you do not trust the label on the panel. Every element you are about to touch is live until your own meter says otherwise. Then you pull the access covers and fold the insulation back.',
+		fail:'Trust the label, trust the switch, and touch a terminal. That is the one mistake on this whole deck that does not give you a second call.',
+		grade:'1', src:'Standard electrical safety practice: lock out, tag out, test dead at the point of work.', layer:'l3a'},
+	{id:'l3b', z:17, sym:'L6', art:'meter', name:'Ohm both elements and read both thermostats', short:'Ohm the elements', fam:'lk', row:3, needs:['l3a'], price:0,
+		law:'An element is either a circuit or it is not. The meter answers in two seconds.',
+		spec:'You pull one leg off each element and you put the meter across the terminals. A live 240-volt element reads roughly 10 to 16 ohms. Open circuit — no reading at all — is a burned element. Then you check each element to the tank for continuity, because an element reading to ground is shorted and has been tripping the high limit. You press the reset on the upper thermostat and you note whether it had already tripped.',
+		fail:'Replace an element you never tested and you have thrown a part at a thermostat. It comes back as the same call with a bigger ticket.',
+		grade:'2', src:'Typical resistance for a 4,500 W element on 240 V is about 12.8 ohms; anything in the 10 to 16 band is normal. Confirm against the element rating on the tank label.', layer:'l3b'},
+	{id:'f3', z:18, sym:'F3', art:'element', name:'Find it: the lower element is open and the tank is full of sediment', short:'Lower element open', fam:'fd', row:3, needs:['l3b'], price:0,
+		law:'An element buried in sediment runs hot and dies early. Replace one without flushing and you have set the clock on the next one.',
+		spec:'The upper element reads 12.8 ohms and the lower reads open. That is your warm-then-cold exactly. You open the drain valve and what comes out is grey and grainy. You read the serial number on the label and it decodes to twelve years old. All three of those facts go on the ticket, because the third one changes the conversation you are about to have.',
+		fail:'Find the element, miss the sediment, and the new element burns out inside a year in the same bed of scale.',
+		grade:'1', src:'Sediment insulates the lower element from the water, so it overheats. Florida water and an unflushed tank are the usual pair.', layer:'f3'},
+	{id:'x3', z:19, sym:'X3', art:'elementNew', name:'Change the lower element and thermostat and flush the tank', short:'Element + flush', fam:'fx', row:3, needs:['f3'], price:310,
+		law:'Fix what you proved was broken. Charge for what you did.',
+		spec:'You drain the tank, you pull the burned element with the socket, you fit a new one of the same wattage with a new gasket, and you change the lower thermostat while the cover is off because it is a fifteen-dollar part behind a thirty-minute job. You flush until it runs clear. You refill, you purge the air at a hot tap before you energise anything, and then you put the breaker back on.',
+		fail:'Energise a dry element and you burn the new one out in about four seconds. Purge the air first, every time.',
+		grade:'2', src:SRC_R+' — a heating element runs $100 to $350, a thermostat $100 to $350, a flush $75 to $250. The Florida average water-heater repair is $455.', layer:'x3'},
+	{id:'x3t', z:19, sym:'Z3', art:'heater', name:'Sell her a new water heater', short:'Sell a new heater', fam:'fx', row:3, needs:['f3'], trap:true, altOf:'x3', price:1850, big:true,
+		law:'It is twelve years old. It is going to fail anyway. And you have one on the truck.',
+		spec:'You tell her the tank is twelve years old, which is true. You tell her it is at the end of its life, which is also true. You do not mention that the fault you measured is a $310 element. You swap the whole unit the same afternoon, it works perfectly, she has hot water, and you write <b>$1,850</b>.',
+		fail:'Everything you said was true and you still lost the street. Two weeks later her neighbour — who is a plumber — asks what was wrong with it, and the answer is “a lower element.” That is a one-star review with your company name spelled correctly, and Vero Beach is not a big town.',
+		grade:'5', src:SRC_R+' — a 50 gal electric replaced runs $1,200 to $2,400 installed in Florida. The number is honest. Selling it against an untested fault is not.', layer:'x3t'},
+	{id:'t3', z:20, sym:'T3', art:'bill', name:'Tell her what the tank has left', short:'What it has left', fam:'tl', row:3, needs:['x3|x3t'], price:0, big:true,
+		law:'The honest version of the upsell is a date, not a truck.',
+		spec:'You tell her the truth in one breath: the element is fixed today, the tank is twelve years old, the anode is almost certainly gone, and a tank that age owes nobody anything. You give her the number so it is never a surprise — <b>$1,200 to $2,400 installed for a 50 gallon electric</b>, plus $50 to $200 for the permit. You tell her to budget it inside two years and to call you before it lets go, not after. Then you write the tank age on the ticket and you leave.',
+		fail:'Say nothing and the day it splits she is standing in six inches of water at eleven at night paying an after-hours rate of $125 to $170 an hour, and she remembers that you were here and did not mention it.',
+		grade:'2', src:SRC_R+' — 50 gal electric installed $1,200 to $2,400 in Florida; permit $50 to $200; after-hours labour $125 to $170 an hour.', layer:'t3'},
+	{id:'p3', z:21, sym:'P3', art:'tick', name:'Run the far shower for fifteen minutes with a thermometer in it', short:'Prove it', fam:'pr', row:3, gate:3, needs:['t3'], failsIf:['x3t'], price:0,
+		law:'The test is the fixture furthest from the tank, for longer than a shower.',
+		spec:'You go to the bathroom furthest from the heater, you run the shower hot, and you put a thermometer in the stream. You leave it running fifteen minutes — longer than anybody showers — and it has to still read about 120 degrees at the end. While it runs you check that the mixing valve stop is still set at 120 and has not been wound open by somebody chasing the cold water she was complaining about.',
+		fail:'Test it at the laundry tub next to the heater and you have proved the top of the tank is hot, which was never the complaint.',
+		grade:'1', src:SRC_P+' 424.3 — the shower valve limit stop is set to a maximum of 120°F. The far fixture for fifteen minutes is the real-world load.', layer:'p3', lit:['x3','t3','p3']},
+
+	/* ================= CALL 4 — “It’s dripping” ================= */
+	{id:'c4', z:22, sym:'C4', art:'phone', name:'Ask when it drips, not where', short:'Take the call', fam:'ca', row:4, needs:['p3'], price:CALLFEE,
+		law:'A pipe that drips on a schedule is not a leaking pipe. It is a valve doing its job.',
+		spec:'You ask when. All the time, or after somebody showers? In the afternoon? If the answer is “about an hour after we use hot water” you already know what this is before you get in the truck, because that is the heater firing and a closed system with nowhere to put the expansion. You tell them to put a bucket under it and not to touch the valve.',
+		fail:'Hear “dripping pipe” and load a soldering kit. You are going to need a gauge and a tank.',
+		grade:'1', src:'Thermal expansion drips on the heating cycle. A failed valve drips constantly. The timing is the diagnosis.', layer:'c4'},
+	{id:'l4a', z:23, sym:'L7', art:'gauge', name:'Put a gauge on the hose bibb and read it twice', short:'Gauge it twice', fam:'lk', row:4, needs:['c4'], price:0,
+		law:'One pressure reading proves nothing. Two readings an hour apart prove everything.',
+		spec:'You screw a pressure gauge on the outside hose bibb and you read it cold — say 62 psi, which is fine. Then you run twenty gallons of hot water, you wait for the heater to fire and recover, and you read it again. If it has climbed to 140 psi with nobody using water, that is thermal expansion and it has nowhere to go. Leave the gauge on the bibb; you are going to use it again as the proof.',
+		fail:'Read it once, see 62 psi, tell them the pressure is fine, and change a valve that was never the problem.',
+		grade:'1', src:SRC_P+' 604.8 — water pressure above 80 psi needs a reducing valve. A gauge is the cheapest tool on the truck and it settles arguments.', layer:'l4a'},
+	{id:'f4', z:24, sym:'F4', art:'expand', name:'Find it: the T and P is doing its job, and there is no expansion tank', short:'No expansion tank', fam:'fd', row:4, needs:['l4a'], price:0,
+		law:'Heat water in a pipe with no way out and something has to give. The relief valve is the thing designed to give.',
+		spec:'You trace the drip and it is coming off the temperature-and-pressure relief line, not off a joint. Then you walk out to the meter and find a check valve or a backflow preventer on the service, which makes this a closed system. There is no expansion tank on the cold inlet. The valve is not failing — it is the only part of this house doing what it was built to do, twice a day, for years.',
+		fail:'Call the relief valve faulty because it is the wet thing. You will change it and it will start dripping again on the next hot shower.',
+		grade:'1', src:SRC_P+' 607.3 — thermal expansion control is required where a check valve, backflow preventer or pressure-reducing valve closes the system.', layer:'f4'},
+	{id:'x4', z:25, sym:'X4', art:'tank2', name:'Set an expansion tank and pre-charge it to the static pressure', short:'Expansion tank', fam:'fx', row:4, needs:['f4'], price:210,
+		law:'A tank pre-charged to the wrong pressure is a tank that does nothing.',
+		spec:'You set the tank on the cold inlet and you support it off the structure, not off the pipe, because a full one is heavy and the joint is not a hanger. Before you fit it you read the static pressure on that gauge — 62 psi — and you set the tank air charge to match it with a tyre gauge and a pump. Not the 40 psi it came with out of the box. Then you fit it, you open up, and you watch the gauge.',
+		fail:'Fit it at the factory 40 psi and the bladder sits collapsed against the water. It will drip again and you will have installed a tank for nothing.',
+		grade:'2', src:SRC_R+' — an expansion tank runs $80 to $150 installed as a line item; on its own as a call it sits around $200 with the diagnostic time in it.', layer:'x4'},
+	{id:'x4t', z:25, sym:'Z4', art:'tpvalve', name:'Change the relief valve', short:'New T&P valve', fam:'fx', row:4, needs:['f4'], trap:true, altOf:'x4', price:175,
+		law:'The wet part is the broken part. It is wrong, but it is a very natural thing to believe.',
+		spec:'The relief valve is what is dripping, it is a twenty-dollar part, and it comes off with a pipe wrench. You drain the tank down below the valve, you swap it, you re-pipe the discharge line, you refill, and you watch it for five minutes. It is dry. You write $175 and you go.',
+		fail:'The new valve is dry for exactly as long as nobody showers. The pressure still has nowhere to go, so it lifts the new valve too — and now she has paid you once to fix a valve that was never broken, and she can hear it dripping again.',
+		grade:'5', src:SRC_P+' 607.3 — the relief valve is the symptom. The closed system is the fault.', layer:'x4t'},
+	{id:'t4', z:26, sym:'T4', art:'bill', name:'Check the reducing valve while the gauge is on', short:'Check the PRV', fam:'tl', row:4, needs:['x4|x4t'], price:0, big:true,
+		law:'You already have the gauge on the house. The second finding is free to make and expensive to miss.',
+		spec:'While the gauge is on the bibb you read the street pressure. If the static sits above 80 psi the reducing valve is gone or was never fitted, and that is a separate job — <b>$300 to $650 installed, average about $475</b>. You tell them the number today even though you are not doing it today, because high pressure is what kills the faucets, the fill valves and the washer hoses one at a time over the next three years.',
+		fail:'Leave a house running at 95 psi and every drip they call you about for the next three years is the same fault wearing a different hat.',
+		grade:'2', src:SRC_R+' — a pressure reducing valve replaced is $300 to $650 installed, average $475, labour $225 to $450. '+SRC_P+' 604.8 sets the 80 psi line.', layer:'t4'},
+	{id:'p4', z:27, sym:'P4', art:'tick', name:'Run the heater through a full cycle and watch the gauge', short:'Prove it', fam:'pr', row:4, gate:4, needs:['t4'], failsIf:['x4t'], price:0,
+		law:'The proof is the gauge not moving while the burner runs.',
+		spec:'You run twenty gallons of hot water again, you let the heater fire and recover, and you both stand at the hose bibb and watch the needle. Cold it read 62. Through a full cycle it now moves a couple of pounds and comes back. The relief line stays dry. You take the gauge off, you show her the tank you fitted and the air valve on top of it, and you tell her to have it checked any time a plumber is in the house.',
+		fail:'Skip the cycle and you have proved the pipe is dry right now, which it also was before you arrived — it only drips when the heater fires.',
+		grade:'1', src:'A correctly pre-charged tank absorbs the expansion; the gauge barely moves. That is the whole test.', layer:'p4', lit:['x4','t4','p4']},
+
+	/* ================= CALL 5 — “It stinks” ================= */
+	{id:'c5', z:28, sym:'C5', art:'phone', name:'Ask which room and whether anybody uses it', short:'Take the call', fam:'ca', row:5, needs:['p4'], price:CALLFEE,
+		law:'A smell is air, and air means a trap is empty or a vent is not working. Those are the only two doors.',
+		spec:'You ask which room, and then you ask the question that solves half of these on the phone: does anybody actually use that bathroom? A guest bath nobody has run since Easter has a trap that evaporated, and that is a jug of water, not a repair. You also ask whether the smell is worse after they run the washer, because that points at the vent instead.',
+		fail:'Book it as a two-hour tear-out and find out it was a dry trap. You have burned a slot you could have sold.',
+		grade:'1', src:SRC_P+' 1002 — the trap seal is 2 in. to 4 in. of water. When it evaporates, the drain is an open pipe to the sewer.', layer:'c5'},
+	{id:'l5a', z:29, sym:'L8', art:'jug', name:'Pour a gallon down every drain in that room and wait', short:'Fill the traps', fam:'lk', row:5, needs:['c5'], price:0,
+		law:'Do the free test first. It is right more often than anything else on this list.',
+		spec:'You pour a gallon down the lavatory, the shower and the floor drain, and you flush the toilet twice. You put a capful of mineral oil in the ones nobody uses, because oil floats and it stops the seal evaporating again. Then you leave the room shut for twenty minutes and come back and smell it yourself. If the smell is gone, that was it, and the whole call is a lesson and a ticket.',
+		fail:'Start pulling a toilet before you have spent five minutes and a gallon of water finding out whether the trap was simply empty.',
+		grade:'1', src:'Evaporation is the most common cause of sewer gas in an unused bathroom. Mineral oil on the seal is standard practice.', layer:'l5a'},
+	{id:'l5b', z:30, sym:'L9', art:'toilet', name:'If it comes back, rock the bowl and look at the base', short:'Rock the bowl', fam:'lk', row:5, needs:['l5a'], price:0,
+		law:'A toilet that moves under your hand has not been sealed for a long time.',
+		spec:'You put a hand each side of the bowl and you rock it. If it moves, the wax is broken and it has been letting air — and sometimes water — past the seal. You look at the base for a caulk bead running all the way around, which hides a leak instead of stopping it, and you look at where the tile meets the flange. Then you put a level across the floor in front of it and check for a soft spot.',
+		fail:'Chase the vent up into the attic on a hot day when the fault was a bowl you could rock with two fingers.',
+		grade:'1', src:'A failed wax seal passes sewer gas before it ever passes enough water for anybody to notice a leak.', layer:'l5b'},
+	{id:'f5', z:31, sym:'F5', art:'flange', name:'Find it: a dry trap AND a flange sitting under the tile', short:'Flange under tile', fam:'fd', row:5, needs:['l5b'], price:0,
+		law:'One call can have two causes. Fix one and you have half-fixed it.',
+		spec:'You pull the bowl and there it is. The closet flange sits about three-eighths of an inch <b>below</b> the finished tile, because whoever set this house five years ago set the flange on the slab and then tiled over it. The wax has been bridging that gap and it gave up. The trap was dry as well, from the room not being used. You write both down, and you photograph the flange with a tape across it.',
+		fail:'Reset it on a fat wax ring and the same gap eats the new one too, on the same schedule.',
+		grade:'1', src:SRC_P+' 405.4 — the closet flange is set on top of and secured to the finished floor. It is one of the two traps in the build model of this house.', layer:'f5'},
+	{id:'x5', z:32, sym:'X5', art:'waxring', name:'Reset it on an extender ring and a new seal', short:'Reset the bowl', fam:'fx', row:5, needs:['f5'], price:230,
+		law:'Bring the flange up to the floor. Do not ask the wax to do a carpenter’s job.',
+		spec:'You scrape the old wax off both faces, you fit a flange extender ring to bring the flange level with the finished tile, and you screw it down into something solid. You set a new wax seal or a rubber gasket, you set the bowl straight down without rocking it, you snug the closet bolts by hand until it stops moving and no further, and you shim any gap. Then you caulk the base — but you leave a gap at the back, so a future leak shows on the floor instead of rotting the subfloor in secret.',
+		fail:'Overtighten the closet bolts and you crack a china bowl, and now you owe them a toilet at $350 to $800 installed.',
+		grade:'2', src:SRC_R+' — a toilet reset on a new wax seal is about $230. A broken flange adds $85 to $350. The deliberate gap in the caulk bead is standard inspection practice.', layer:'x5'},
+	{id:'x5t', z:32, sym:'Z5', art:'caulk', name:'Caulk all the way round and drop a puck in the tank', short:'Caulk and deodorise', fam:'fx', row:5, needs:['f5'], trap:true, altOf:'x5', price:60,
+		law:'The smell stops today. That is the entire case for it.',
+		spec:'The bowl only moves a little. You run a bead of silicone all the way around the base, you seal it tight against the tile, and you drop a scented puck in the tank. The bathroom smells like a hotel by the time you leave and you write $60 for the trip.',
+		fail:'You sealed the gas in, which also seals the water in. Now the broken wax leaks under a caulked bead onto the subfloor where nobody can see it. She calls in eight months about a soft floor, and that call is a bowl, a flange, a subfloor and a tile man.',
+		grade:'5', src:'Caulking a toilet base is correct practice — with a deliberate gap at the back, so a failed seal reports itself. A continuous bead over a known bad wax hides a leak.', layer:'x5t'},
+	{id:'t5', z:33, sym:'T5', art:'bill', name:'Tell them the monthly job and the next suspect', short:'Run water monthly', fam:'tl', row:5, needs:['x5|x5t'], price:0,
+		law:'The cheapest thing you can sell is the thing that stops them needing you.',
+		spec:'You tell them to run every fixture in that guest bath once a month for thirty seconds, and to pour a capful of mineral oil down the floor drain twice a year. Then you name the next suspect out loud: if the smell ever comes back with wet traps and a solid bowl, it is the vent, and you go in the attic and up on the roof for that one. That sentence is what makes them call you and not somebody else.',
+		fail:'Fix it and say nothing, and the next time it smells they assume your repair failed.',
+		grade:'1', src:SRC_P+' Ch. 9 — every vent terminal reaches outside air. A vent blocked or terminated in the attic is the other way sewer gas gets in.', layer:'t5'},
+	{id:'p5', z:34, sym:'P5', art:'tick', name:'Fill the trap, flush it six times, and smell it yourself', short:'Prove it', fam:'pr', row:5, gate:5, needs:['t5'], failsIf:['x5t'], price:0,
+		law:'You are the last nose in the room. Use it.',
+		spec:'You fill every trap in the room, you flush the toilet six times back to back and watch the base with a dry hand each time, and you put a level on the bowl. Then you shut the door for ten minutes, walk back in, and smell it yourself before you ask her to. If you would not put your own family in that room, it is not finished.',
+		fail:'Ask her whether she can still smell it while you are both standing in a room you have had the window open in for an hour.',
+		grade:'1', src:'Six flushes is enough to find a seal that only fails under a full bowl. The closed-door wait is what makes the smell test honest.', layer:'p5', lit:['x5','t5','p5']},
+
+	/* ================= CALL 6 — “It’s backing up” ================= */
+	{id:'c6', z:35, sym:'C6', art:'phone', name:'Ask one question and give one instruction', short:'Take the call', fam:'ca', row:6, needs:['p5'], price:CALLFEE,
+		law:'On this one call you talk before you listen, because every minute they keep using water makes your job dirtier.',
+		spec:'First the instruction: stop using water right now, everybody, including the washer and the dishwasher. Then the question: is it every fixture in the house, or one side of it? Every fixture means the main and you bring the big machine and the camera. One side means a branch. You also ask whether the cleanout cap in the yard is up or down, because if it has popped, the line is already full and this is today, not tomorrow.',
+		fail:'Let them run a wash cycle while you drive over and you arrive to a bathroom floor instead of a slow drain.',
+		grade:'1', src:'Every fixture sharing the symptom puts the fault downstream of all of them — the building drain or the sewer.', layer:'c6'},
+	{id:'l6a', z:36, sym:'LA', art:'cleanout', name:'Pull the cap at the property line before anything else', short:'Pull the cap', fam:'lk', row:6, needs:['c6'], price:0,
+		law:'That cleanout tells you whose problem this is, and it answers in about four seconds.',
+		spec:'You go straight past the house to the two-way cleanout at the property line and you pull the cap — standing to one side, because it can be under head. If it is full on the house side and empty on the street side, the blockage is between there and the house and it is theirs. If it is full on both sides, the blockage is downstream of the property line and it is the county’s line, and your next call is to Indian River County Utilities, not for your cable.',
+		fail:'Spend two hours and a machine on a line that was never yours to clear, and then explain the invoice.',
+		grade:'1', src:'Indian River County inspection 750 — Utilities Sewer Cleanout. It is required at the junction and it is the single most useful fitting on the property.', layer:'l6a'},
+	{id:'l6b', z:37, sym:'LB', art:'camera', name:'Put a camera down it and find the footage mark', short:'Camera the line', fam:'lk', row:6, needs:['l6a'], price:265,
+		law:'Cable it blind and you will be back. Look at it once and you will know for years.',
+		spec:'You run the camera from the cleanout toward the street and you watch the counter. At about forty feet the picture fills with white root hair coming in at a joint from every side. You mark the ground above the head with paint, you write the footage on the ticket, and you record the clip. That clip is what turns a guess into a quote later, and it is the only thing that will get a homeowner to spend real money on a pipe they cannot see.',
+		fail:'Skip the camera and the only thing you can honestly sell is another cabling, forever.',
+		grade:'2', src:SRC_R+' — a sewer camera inspection is $125 to $500, about $265 in Florida. Some shops fold it into a flat-rate main-line price.', layer:'l6b'},
+	{id:'f6', z:38, sym:'F6', art:'root', name:'Find it: roots at a joint, about forty feet out', short:'Roots at 40 ft', fam:'fd', row:6, needs:['l6b'], price:0,
+		law:'Roots do not come through good pipe. They come through a joint that was already open.',
+		spec:'You have it on video at forty feet: a mat of fine root hair entering at a hub, with paper caught on it. That is the fault and it is also the diagnosis of a second thing — a joint that leaks enough for a root to find it will keep finding it. You note the depth, the footage, and what is planted above it, because the ficus in the front yard is not going to change its mind.',
+		fail:'Report “a clog.” A clog is what the homeowner already told you. Roots at a joint at forty feet is a finding.',
+		grade:'1', src:'Root intrusion enters at joints and cracks, drawn by moisture. Cutting removes the mat, not the opening.', layer:'f6'},
+	{id:'x6', z:39, sym:'X6', art:'jet', name:'Cut the roots out today, then jet the line clean', short:'Cut and jet', fam:'fx', row:6, needs:['f6'], price:850, big:true,
+		law:'The cutter opens it. The jet is what actually cleans the wall of the pipe.',
+		spec:'You run the sectional machine with a root-cutting head from the cleanout out past forty feet and you pull it back cutting, twice. Then you bring the jetter and you wash the line the full length, because the cutter leaves the root stubs and the grease ring and the jet takes both off the wall. You camera it a second time afterwards and you keep that clip too. Then you flush the house through it.',
+		fail:'Cut and leave. What is left on the pipe wall is exactly what the next root grows into, and it regrows fastest right where you just cut it.',
+		grade:'2', src:SRC_R+' — cabling the main with a root cutter is $200 to $500 and roots add $200 to $600; hydro jetting is $600 to $1,400. Together this sits near $850 on a forty-foot run.', layer:'x6'},
+	{id:'x6t', z:39, sym:'Z6', art:'cableOnly', name:'Cable it and leave', short:'Cable and leave', fam:'fx', row:6, needs:['f6'], trap:true, altOf:'x6', price:350,
+		law:'The water goes down. She thanks you at the door. You are an hour ahead of schedule.',
+		spec:'You run the machine, you feel the cutter chew through, and the standing water in the yard drops away. You pull back, you cap the cleanout, you flush a toilet and watch it clear, and you write $350. The jetter is still on the truck and the camera is still in the bag. You are on your next call by two.',
+		fail:'What you cut grows back into the same joint, faster than before, because a cut root branches. It backs up again in about four months — on a Sunday of a holiday weekend, into the guest bath tub, at an after-hours rate of $125 to $170 an hour. She pays twice and tells everybody once.',
+		grade:'5', src:'Mechanical cutting alone leaves the root stubs and the grease; regrowth is measured in months, not years. '+SRC_R+' — after-hours labour $125 to $170 an hour.', layer:'x6t'},
+	{id:'t6', z:40, sym:'T6', art:'bill', name:'Put the real number in front of them', short:'The real number', fam:'tl', row:6, needs:['x6|x6t'], price:0, big:true,
+		law:'Jetting buys twelve to twenty-four months. It does not fix a broken joint, and saying otherwise is how you end up owning the problem.',
+		spec:'You sit at the table with the video on your phone and you say it plainly. This line will need cutting again, probably inside two years. The permanent fix is lining it or replacing that run, and it is <b>$50 to $250 a foot — call it $2,000 to $10,000 for a forty-foot run</b>. Trenchless bursting is $60 to $200 a foot and CIPP lining $90 to $250 a foot; open-cut is cheaper per foot until it crosses the driveway, and then concrete removal adds $3 to $8 a square foot. You give her all three numbers and you let her pick the year.',
+		fail:'Let her believe an $850 jetting is permanent and you have sold her a subscription she does not know she bought. That is the call where a customer stops trusting the trade.',
+		grade:'2', src:SRC_R+' — sewer line replacement $50 to $250 a foot, $2,000 to $10,000 for a typical 40 ft run; pipe bursting $60 to $200 a foot; CIPP lining $90 to $250 a foot; concrete removal $3 to $8 a square foot (HomeGuide 2026).', layer:'t6'},
+	{id:'p6', z:41, sym:'P6', art:'tick', name:'Run every fixture in the house at once', short:'Prove it', fam:'pr', row:6, gate:6, needs:['t6'], failsIf:['x6t'], price:0,
+		law:'A main line is proved by the whole house, not by one toilet.',
+		spec:'You leave the cleanout cap off and you watch it while somebody runs both showers, both toilets, the kitchen sink and the washer on a drain cycle, all at once. The cleanout has to stay empty through all of it. Then you cap it, you hand her the two video clips — the roots before and the clean pipe after — and you write the footage mark on the ticket so the next man, even if he is not you, starts at forty feet.',
+		fail:'Flush one toilet and call a main line clear. One toilet is four gallons; the house at once is what actually found the blockage in the first place.',
+		grade:'1', src:'Full-house simultaneous discharge is the only load that reproduces the original complaint.', layer:'p6', lit:['x6','t6','p6']},
+];
+const byId = Object.fromEntries(PARTS.map(p=>[p.id,p]));
+const famById = Object.fromEntries(FAMS.map(f=>[f.id,f]));
+const fill = (h,h2)=>`linear-gradient(155deg, color-mix(in srgb, ${h} 58%, #ffffff) 0%, ${h} 46%, ${h2} 100%)`;
+const NG = ROWS.length;
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {placed:new Set(), leaks:0, fails:0, passed:new Set(), burned:new Set(), failedRows:new Set(), view:'xray', sel:null, mode:'deck', invoice:0, ate:0};
+const stage = document.getElementById('stage');
+const SORTED = PARTS.slice().sort((a,b)=>a.z-b.z || (a.trap?1:0)-(b.trap?1:0));
+const ORDER = SORTED.filter(p=>p.fam!=='ca');        // the ring: the work
+const PAPER = SORTED.filter(p=>p.fam==='ca');        // the shelf: the six phone calls
+const N = ORDER.length;
+// clockwise from 12 o'clock, spaced by arc length so the flat top of a tall screen is not crowded
+let ANGS = [];
+const ANG = i => ANGS[i];
+function spaceRing(rx, ry){
+	const M = 720, len = [0]; let prev = [rx*Math.cos(-Math.PI/2), ry*Math.sin(-Math.PI/2)];
+	for(let k=1;k<=M;k++){ const a = -Math.PI/2 + 2*Math.PI*k/M; const p = [rx*Math.cos(a), ry*Math.sin(a)]; len.push(len[k-1] + Math.hypot(p[0]-prev[0], p[1]-prev[1])); prev = p; }
+	const total = len[M];
+	ANGS = ORDER.map((_,i)=>{ const s = total*(i+0.5)/N; let k=0; while(k<M && len[k+1]<s) k++; const f=(s-len[k])/(len[k+1]-len[k]); return -Math.PI/2 + 2*Math.PI*(k+f)/M; });
+}
+const MID = (i,j) => { let a = ANGS[i], b = ANGS[j]; if(b < a) b += 2*Math.PI; return (a+b)/2; };
+let geo = {cx:0,cy:0,rx:0,ry:0};
+
+function el(tag, cls){ const n=document.createElement(tag); if(cls) n.className=cls; return n; }
+const svgNS='http://www.w3.org/2000/svg';
+function mk(tag, attrs){ const n=document.createElementNS(svgNS,tag); for(const k in attrs) n.setAttribute(k, attrs[k]); return n; }
+
+/* ============================================================
+   THE RING — the table's rows become arcs, its tiles a dial
+   ============================================================ */
+function inspectorSVG(n, ink){
+	return `<svg viewBox="0 0 34 32" width="100%" height="100%" aria-hidden="true">
+		<circle cx="11" cy="7.5" r="4.2" fill="${ink}"/>
+		<path d="M3.5 29 v-9 a7.5 7.5 0 0 1 15 0 v9 z" fill="${ink}"/>
+		<path d="M16 21 L21 17" stroke="${ink}" stroke-width="2.6" stroke-linecap="round"/>
+		<circle cx="24.5" cy="14.5" r="7" fill="rgba(255,255,255,.55)" stroke="${ink}" stroke-width="2.2"/>
+		<path d="M29.5 19.5 L33 23" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>
+		<text x="24.5" y="17.8" text-anchor="middle" font-family="Iowan Old Style,Palatino Linotype,Palatino,Georgia,serif" font-size="${n>9?8.5:10}" font-weight="700" fill="${ink}">${n}</text>
+	</svg>`;
+}
+function permitSVG(ink){
+	return `<svg viewBox="0 0 32 32" width="100%" height="100%" aria-hidden="true">
+		<path d="M7 3 h13 l6 6 v20 h-19 z" fill="rgba(255,255,255,.75)" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round"/>
+		<path d="M20 3 v6 h6" fill="none" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round"/>
+		<path d="M10.5 13 h11 M10.5 17 h11 M10.5 21 h7" stroke="${ink}" stroke-width="1.6" stroke-linecap="round"/>
+		<circle cx="21" cy="24" r="3.2" fill="none" stroke="#b3382a" stroke-width="1.6"/>
+	</svg>`;
+}
+/* ---------- the picture on the face of every card: keyed off p.layer, still data ---------- */
+const ART = {
+	/* ---- the call ---- */
+	phone:(k)=>`<path d="M14 8c-4 0-7 3-7 7 0 14 14 28 28 28 4 0 7-3 7-7v-4l-10-4-5 5c-5-3-10-8-13-13l5-5-4-10z"/><path d="M44 6h14v12H50l-6 5z" opacity=".55"/>`,
+	/* ---- looking ---- */
+	tank:(k)=>`<rect x="12" y="12" width="40" height="26" rx="2"/><path d="M8 8h48" stroke-width="4"/><path d="M32 38V18"/><circle cx="32" cy="16" r="3"/><path d="M20 30h10" opacity=".6"/>`,
+	dye:(k)=>`<rect x="12" y="14" width="40" height="26" rx="2"/><path d="M12 24h40" stroke-width="5" opacity=".55"/><circle cx="32" cy="10" r="4"/><path d="M32 14v4"/>`,
+	drops:(k)=>`<path d="M14 8c5 7 8 11 8 15a8 8 0 0 1-16 0c0-4 3-8 8-15z"/><path d="M34 12c5 7 8 11 8 15a8 8 0 0 1-16 0c0-4 3-8 8-15z" opacity=".7"/><path d="M54 8v14"/><path d="M8 42h48"/>`,
+	trap:(k)=>`<path d="M18 6v18"/><path d="M18 24a9 9 0 0 0 18 0V12"/><path d="M36 12h20"/><circle cx="27" cy="30" r="2.4" fill="${k}" stroke="none"/><path d="M46 30h12M52 26v8" opacity=".5"/>`,
+	breaker:(k)=>`<rect x="18" y="6" width="28" height="36" rx="2"/><path d="M24 14h16M24 22h16M24 30h16" opacity=".5"/><path d="M36 12l-8 12h8l-8 12" stroke-width="3.4"/>`,
+	meter:(k)=>`<rect x="8" y="12" width="30" height="24" rx="3"/><path d="M14 24h18" stroke-width="3"/><path d="M38 20h12M38 30h12"/><circle cx="54" cy="20" r="3" fill="${k}" stroke="none"/><circle cx="54" cy="30" r="3" fill="${k}" stroke="none"/>`,
+	gauge:(k)=>`<circle cx="30" cy="22" r="15"/><path d="M30 22l9-9"/><circle cx="30" cy="22" r="2.4" fill="${k}" stroke="none"/><path d="M30 37v7"/><path d="M22 44h16"/><path d="M50 12v20" opacity=".5"/>`,
+	jug:(k)=>`<path d="M16 14h20v26a4 4 0 0 1-4 4H20a4 4 0 0 1-4-4z"/><path d="M22 14V8h8v6"/><path d="M36 20h8v10"/><path d="M50 34c4 5 6 7 6 9a6 6 0 0 1-12 0c0-2 2-4 6-9z"/>`,
+	toilet:(k)=>`<rect x="10" y="6" width="16" height="13" rx="1.5"/><path d="M6 21h26a13 10 0 0 1-26 0z"/><path d="M14 31v9h10v-9"/><path d="M44 14v18M38 18l6-6 6 6" opacity=".8"/>`,
+	cleanout:(k)=>`<path d="M4 34h56" stroke-width="4" opacity=".5"/><path d="M22 34V12"/><path d="M14 12h16" stroke-width="5"/><circle cx="22" cy="8" r="4"/><path d="M34 26l10 8-10 8" opacity=".6"/>`,
+	camera:(k)=>`<circle cx="46" cy="24" r="9"/><circle cx="46" cy="24" r="3.4" fill="${k}" stroke="none"/><path d="M37 24C28 24 24 12 14 12"/><path d="M14 6v28" stroke-width="4"/><circle cx="14" cy="40" r="5"/>`,
+	/* ---- finding ---- */
+	flapper:(k)=>`<path d="M14 30h24a8 6 0 0 1-24 0z"/><path d="M14 30V18a5 5 0 0 1 10 0"/><path d="M40 14l6 6-6 6" opacity=".7"/><path d="M8 40h48" stroke-dasharray="3 4"/><circle cx="50" cy="24" r="4" opacity=".7"/>`,
+	flapperNew:(k)=>`<path d="M12 28h24a8 6 0 0 1-24 0z"/><path d="M12 28V16a5 5 0 0 1 10 0"/><path d="M40 20h16" stroke-width="4"/><path d="M44 12l6 6-6 6"/><path d="M8 42h48"/>`,
+	grease:(k)=>`<path d="M6 18h52" stroke-width="3"/><path d="M6 34h52" stroke-width="3"/><path d="M20 18c4 6 12 6 16 0M20 34c4-6 12-6 16 0" opacity=".9"/><ellipse cx="28" cy="26" rx="10" ry="7" fill="${k}" stroke="none" opacity=".45"/>`,
+	element:(k)=>`<rect x="6" y="14" width="10" height="20" rx="2"/><path d="M16 24h6"/><path d="M22 24q4-8 8 0t8 0 8 0 8 0"/><path d="M54 24h4"/><path d="M30 38l6-6" opacity=".8"/><path d="M36 38l-6-6" opacity=".8"/>`,
+	elementNew:(k)=>`<rect x="6" y="14" width="10" height="20" rx="2"/><path d="M16 24h6"/><path d="M22 24q4-8 8 0t8 0 8 0 8 0"/><path d="M54 24h4"/><path d="M30 40h12" stroke-width="4"/>`,
+	expand:(k)=>`<path d="M6 24h18"/><rect x="24" y="10" width="20" height="28" rx="9"/><path d="M24 24h20" stroke-dasharray="3 3"/><path d="M44 24h12"/><path d="M50 18v12"/>`,
+	tank2:(k)=>`<rect x="22" y="8" width="22" height="26" rx="10"/><path d="M33 8V3"/><path d="M6 40h18V34"/><path d="M24 40h32"/><path d="M33 34v6"/>`,
+	tpvalve:(k)=>`<rect x="14" y="10" width="14" height="12" rx="2"/><path d="M28 16h8v20"/><path d="M36 40h10"/><path d="M21 10V4"/><path d="M40 44c3 0 3-4 0-4s-3 4 0 4z" fill="${k}" stroke="none"/>`,
+	heater:(k)=>`<rect x="18" y="4" width="24" height="32" rx="5"/><path d="M12 36h36v6H12z"/><path d="M30 4V0"/><path d="M48 12h10v28" opacity=".6"/><path d="M24 44v-2M36 44v-2"/>`,
+	flange:(k)=>`<ellipse cx="32" cy="18" rx="18" ry="7"/><path d="M14 18v8a18 7 0 0 0 36 0v-8"/><path d="M4 34h56" stroke-width="4" opacity=".55"/><circle cx="18" cy="18" r="2" fill="${k}" stroke="none"/><circle cx="46" cy="18" r="2" fill="${k}" stroke="none"/><path d="M24 40v-6M40 40v-6" opacity=".5"/>`,
+	waxring:(k)=>`<ellipse cx="32" cy="16" rx="16" ry="6"/><ellipse cx="32" cy="28" rx="16" ry="6"/><path d="M16 16v12M48 16v12"/><path d="M6 40h52" stroke-width="4"/>`,
+	caulk:(k)=>`<path d="M10 40h44" stroke-width="5"/><path d="M22 40V22h20v18"/><path d="M44 10l10 6-6 8" opacity=".8"/><path d="M40 24c4 0 6 4 6 6" opacity=".6"/>`,
+	cable:(k)=>`<circle cx="16" cy="24" r="11"/><circle cx="16" cy="24" r="4"/><path d="M27 24h14"/><path d="M41 18v12M46 16v16M51 18v12"/><path d="M56 24h2"/>`,
+	cableOnly:(k)=>`<circle cx="18" cy="24" r="11"/><circle cx="18" cy="24" r="4"/><path d="M29 24h22" stroke-dasharray="4 4"/><path d="M46 18l6 6-6 6"/>`,
+	auger:(k)=>`<path d="M10 12v24"/><path d="M18 14c8 4 8 12 0 16s-8 8 0 12" opacity=".9"/><path d="M34 40h22" opacity=".5"/><circle cx="46" cy="20" r="5" opacity=".6"/>`,
+	jet:(k)=>`<circle cx="14" cy="24" r="9"/><path d="M23 24h10"/><path d="M33 18h6v12h-6z"/><path d="M41 24h4M41 18h5M41 30h5M45 14h4M45 34h4M49 20h5M49 28h5"/>`,
+	root:(k)=>`<path d="M4 30h56" stroke-width="3"/><path d="M4 14h56" stroke-width="3"/><path d="M32 14c-3 5-9 6-12 10 6 2 9 6 12 6s6-4 12-6c-3-4-9-5-12-10z" fill="${k}" stroke="none" opacity=".4"/><path d="M32 14v16M24 16l6 8M40 16l-6 8M22 28l8-4M42 28l-8-4"/>`,
+	/* ---- telling and proving ---- */
+	bill:(k)=>`<path d="M12 4h32l8 8v34H12z"/><path d="M44 4v8h8"/><path d="M19 20h24M19 27h24M19 34h14"/><path d="M40 40c5 0 5-6 0-6s-5 6 0 6z" fill="${k}" stroke="none" opacity=".8"/>`,
+	tick:(k)=>`<circle cx="32" cy="24" r="18"/><path d="M22 24l7 8 14-16" stroke-width="4"/>`,
+};
+function artSVG(p, ink){
+	if(p.icon==='inspector') return inspectorSVG(p.row, ink);
+	if(p.icon==='permit') return permitSVG(ink);
+	const g = ART[p.art || p.layer];
+	return `<svg viewBox="0 0 64 48" width="100%" height="100%" aria-hidden="true" fill="none" stroke="${ink}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${g?g(ink):'<circle cx="32" cy="24" r="12"/>'}</svg>`;
+}
+
+/* ---------- the face of a card, small on the ring or big in the deck ---------- */
+function cardFace(p, big){
+	const f = famById[p.fam], r = ROWS[p.row-1], ink = '#161410';
+	const art = `<span class="pic">${artSVG(p, ink)}</span>`;
+	const lk = p.link ? '<span class="lk" title="Opens the build model">↗</span>' : '';
+	const pz = p.price ? `<span class="pz">$${p.price.toLocaleString('en-US')}</span>` : '';
+	const bg = p.big ? `<span class="bigc" title="One of the big-ticket numbers">BIG TICKET</span>` : '';
+	if(big) return `<span class="z">${p.z}</span><span class="st">Call ${p.row}<b>${r.label}</b></span>${art}`
+		+ `<span class="nm">${p.name}</span><span class="fm">${f.label} · ${f.q}</span>${pz}${bg}${lk}`;
+	return `<span class="z">${p.z}</span><span class="st">${p.row}</span>${art}<span class="nm">${p.short}</span>${pz}${lk}`;
+}
+function tileNode(p, live, big){
+	const f = famById[p.fam];
+	const b = el('button', 'tile' + (big?' big':'')); b.type='button'; b.dataset.id = p.id;
+	b.style.background = fill(f.hue,f.hueTo);
+	b.setAttribute('aria-label', `Card ${p.z}. ${p.name}. ${f.label}, call ${p.row} ${ROWS[p.row-1].label}.`);
+	b.innerHTML = cardFace(p, big);
+	if(live){
+		b.addEventListener('pointerdown', startDrag);
+		b.addEventListener('pointerenter', e=>{ if(!drag && !big && window.matchMedia('(hover:hover)').matches) openPeek(p.id, {}); });
+		b.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); attempt(p.id); } });
+	}
+	return b;
+}
+
+/* ============================================================
+   THE DECK — 40 cards in one stack, drawn in order.
+   The ring is still here, one button away.
+   ============================================================ */
+let deckIdx = 0;
+const deckBox = document.getElementById('deck');
+function deckAvail(){ return SORTED.filter(p=>!state.placed.has(p.id) && !state.burned.has(p.id) && !coveredBy(p)); }
+function deckGo(d){ const a=deckAvail(); if(!a.length) return; deckIdx=(deckIdx+d+a.length)%a.length; renderDeck(); refreshTiles(); }
+function deckSeek(){ const a=deckAvail(); const i=a.findIndex(ready); deckIdx = i>=0 ? i : 0; }
+function renderDeck(){
+	if(state.mode!=='deck') return;
+	const a = deckAvail();
+	const host = document.getElementById('dcard');
+	if(!a.length){ host.innerHTML='<div class="ddone">Every card is played.</div>'; document.getElementById('dcount').textContent=''; document.getElementById('dpips').innerHTML=''; return; }
+	deckIdx = ((deckIdx % a.length) + a.length) % a.length;
+	const p = a[deckIdx];
+	host.innerHTML=''; host.appendChild(tileNode(p, true, true));
+	document.getElementById('dcount').innerHTML =
+		`Card <b>${p.z}</b> of <b>${SORTED.length}</b> &nbsp;·&nbsp; Call <b>${p.row}</b> of <b>${ROWS.length}</b>`;
+	document.getElementById('dleft').textContent = a.length + ' left in the deck';
+	document.getElementById('dpips').innerHTML = ROWS.map(r=>{
+		const k = state.passed.has(r.n) ? 'pass' : state.failedRows.has(r.n) ? 'fail' : (openRow()===r.n ? 'open' : '');
+		return `<i class="${k}" title="Call ${r.n} — ${r.label}"></i>`;
+	}).join('');
+	deckBox.classList.toggle('ready', ready(p));
+}
+function setMode(m){
+	state.mode = m;
+	document.getElementById('dall').textContent = m==='deck'
+		? (innerWidth < 760 ? `See all ${SORTED.length}` : `See all ${SORTED.length} around the house`)
+		: 'Back to the deck';
+	stage.classList.toggle('deckmode', m==='deck');
+	if(m==='deck') deckSeek();
+	layout(); refreshTiles();
+	say('', m==='deck'
+		? `<b>The deck.</b> ${SORTED.length} cards, ${ROWS.length} calls. Drag the top card onto the house, or use the arrows to look through the deck.`
+		: `<b>All ${SORTED.length} cards.</b> The ring is the whole job at once, clockwise from the top. Gold ring = you can play it now.`);
+}
+
+function buildRing(){
+	stage.querySelectorAll('.tile:not(.big)').forEach(t=>t.remove());
+	SORTED.forEach(p=>stage.appendChild(tileNode(p,true,false)));
+	document.getElementById('dprev').addEventListener('click', ()=>deckGo(-1));
+	document.getElementById('dnext').addEventListener('click', ()=>deckGo(1));
+	document.getElementById('dall').addEventListener('click', ()=>setMode(state.mode==='deck'?'ring':'deck'));
+	window.addEventListener('keydown', e=>{
+		if(state.mode!=='deck' || e.metaKey || e.ctrlKey) return;
+		if(e.key==='ArrowLeft'){ e.preventDefault(); deckGo(-1); }
+		if(e.key==='ArrowRight'){ e.preventDefault(); deckGo(1); }
+	});
+	setMode('deck');
+}
+
+function layout(){
+	const W = stage.clientWidth, H = stage.clientHeight;
+	deckBox.style.display = state.mode==='deck' ? '' : 'none';
+	document.getElementById('dial').style.display = state.mode==='deck' ? 'none' : '';
+	if(state.mode==='deck') layoutDeck(W,H); else layoutRing(W,H);
+}
+function fitBox(x0,y0,x1,y1){                       // biggest 800:560 box in that rectangle
+	const k = 800/560, w = x1-x0, h = y1-y0;
+	let bw = Math.min(w, h*k), bh = bw/k;
+	return [x0 + (w-bw)/2, y0 + (h-bh)/2, bw, bh];
+}
+function layoutDeck(W,H){
+	const narrow = W < 760;
+	let x0,y0,x1,y1;
+	if(narrow){
+		deckBox.style.left='50%'; deckBox.style.transform='translateX(-50%)';
+		deckBox.style.bottom='10px'; deckBox.style.top='auto';
+		x0 = 10; x1 = W-10; y0 = 190; y1 = H - (deckBox.offsetHeight||196) - 74;
+	} else {
+		const dw = deckBox.offsetWidth || 246;
+		deckBox.style.left='16px'; deckBox.style.transform='none';
+		const dh = deckBox.offsetHeight || 380;
+		deckBox.style.top = Math.max(80, Math.min(152, H - dh - 96)) + 'px'; deckBox.style.bottom='auto';
+		x0 = dw + 34; x1 = W - 18; y0 = 84; y1 = H - 104;
+	}
+	const [bx,by,bw,bh] = fitBox(x0,y0,x1,y1);
+	const box = document.getElementById('housebox');
+	box.style.left=bx+'px'; box.style.top=by+'px'; box.style.width=bw+'px'; box.style.height=bh+'px';
+	const msg = document.getElementById('msg');
+	msg.style.left = (bx + bw/2) + 'px'; msg.style.top = (by + bh + 4) + 'px';
+	geo.tw = 60; geo.th = 52;
+}
+function layoutRing(W,H){
+	const tw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tw'));
+	const th = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--th'));
+	const cx = W/2, cy = H/2;
+	const rx = W/2 - tw/2 - 12, ry = H/2 - th/2 - 12;
+	geo = {cx,cy,rx,ry,tw,th,stagger:1};
+	spaceRing(rx, ry);
+	ORDER.forEach((p,i)=>{
+		const t = stage.querySelector(`.tile[data-id="${p.id}"]:not(.big)`); if(!t) return;
+		const a = ANG(i);
+		t.style.left = (cx + rx*Math.cos(a))+'px'; t.style.top = (cy + ry*Math.sin(a))+'px';
+	});
+	const irx = rx - tw/2 - 18, iry0 = ry - th/2 - 18 - 14;
+	const k = 800/560;
+	const fit = (iry)=>{ const b = 1/Math.sqrt((k/irx)**2 + (1/iry)**2); return [k*b, b]; };
+	let rows = 1, a, b;
+	for(let pass=0; pass<2; pass++){
+		[a,b] = fit(iry0 - rows*(th+10)/2);
+		const top = cy - b + rows*(th+10)/2 - 10;
+		const shelfY = top - th/2 - 8 - (rows-1)*(th+6);
+		const v = Math.min(0.98, Math.abs(shelfY - cy)/ry);
+		const avail = 2*(rx*Math.sqrt(1-v*v) - tw/2 - 10);
+		rows = Math.ceil(PAPER.length / Math.max(3, Math.floor(avail/(tw+4))));
+	}
+	const box = document.getElementById('housebox');
+	box.style.width = (2*a)+'px'; box.style.height = (2*b)+'px';
+	const top = cy - b + rows*(th+10)/2 - 10;
+	box.style.left = (cx-a)+'px'; box.style.top = top+'px';
+	const perRow = Math.ceil(PAPER.length/rows);
+	for(let r=0; r<rows; r++){
+		const items = PAPER.slice(r*perRow, (r+1)*perRow);
+		const gap = Math.min(12, Math.max(4, (2*a - items.length*tw)/(items.length+1)));
+		items.forEach((p,i)=>{
+			const t = stage.querySelector(`.tile[data-id="${p.id}"]:not(.big)`); if(!t) return;
+			t.style.left = (cx + (i-(items.length-1)/2)*(tw+gap))+'px';
+			t.style.top = (top - th/2 - 8 - (rows-1-r)*(th+6))+'px';
+		});
+	}
+	const msg = document.getElementById('msg');
+	msg.style.left = '50%'; msg.style.top = (top + 2*b - 6)+'px';
+	drawDial();
+}
+function drawDial(){
+	const d = document.getElementById('dial'); d.innerHTML='';
+	if(state.mode!=='ring') return;
+	const {cx,cy,rx,ry} = geo;
+	const pt = a => [cx+rx*Math.cos(a), cy+ry*Math.sin(a)];
+	ROWS.forEach(r=>{
+		const idx = ORDER.map((p,i)=>p.row===r.n?i:-1).filter(i=>i>=0);
+		if(!idx.length) return;
+		const i0 = idx[0], i1 = idx[idx.length-1];
+		const a0 = (i0===0 ? -Math.PI/2 : MID(i0-1, i0)) + 0.02, a1 = (i1===N-1 ? 3*Math.PI/2 : MID(i1, i1+1)) - 0.02;
+		const [x0,y0]=pt(a0), [x1,y1]=pt(a1);
+		const large = (a1-a0) > Math.PI ? 1 : 0;
+		const status = state.passed.has(r.n) ? 'pass' : state.failedRows.has(r.n) ? 'fail' : (openRow()===r.n ? 'open' : '');
+		d.appendChild(mk('path',{d:`M${x0},${y0} A${rx},${ry} 0 ${large} 1 ${x1},${y1}`, class:'arc '+status}));
+		const am = (a0+a1)/2; const lx = cx + (rx-geo.tw/2-12)*Math.cos(am), ly = cy + (ry-geo.th/2-12)*Math.sin(am);
+		const t = mk('text',{x:lx, y:ly, class:'rl '+status, 'text-anchor': Math.cos(am)>0.3?'end':Math.cos(am)<-0.3?'start':'middle', 'dominant-baseline':'middle'});
+		t.textContent = `${r.n} · ${r.label}`; d.appendChild(t);
+	});
+}
+function openRow(){ const g = PARTS.find(p=>p.gate && !state.placed.has(p.id)); return g ? g.row : 0; }
+function refreshTiles(){
+	document.querySelectorAll('.tile').forEach(t=>{
+		const p = byId[t.dataset.id]; if(!p) return;
+		t.classList.toggle('spent', state.placed.has(p.id));
+		t.classList.toggle('burned', state.burned.has(p.id));
+		t.classList.toggle('covered', !state.placed.has(p.id) && !!coveredBy(p));
+		t.classList.toggle('ready', ready(p));
+		t.classList.toggle('sel', state.sel===p.id);
+	});
+	const u = document.getElementById('undo'); if(u) u.disabled = past.length === 0;
+	renderDeck();
+	drawDial();
+}
+window.addEventListener('resize', layout);
+
+/* ============================================================
+   DRAG — to the house in the middle
+   ============================================================ */
+const ghost = document.getElementById('ghost');
+const housebox = document.getElementById('housebox');
+let drag = null;
+function startDrag(e){
+	if(e.button!==undefined && e.button!==0) return;
+	const t = e.currentTarget; const id = t.dataset.id;
+	drag = {id, x0:e.clientX, y0:e.clientY, moved:false, t};
+	t.setPointerCapture(e.pointerId);
+	t.addEventListener('pointermove', moveDrag);
+	t.addEventListener('pointerup', endDrag);
+	t.addEventListener('pointercancel', endDrag);
+}
+function moveDrag(e){
+	if(!drag) return;
+	if(!drag.moved && Math.hypot(e.clientX-drag.x0, e.clientY-drag.y0) > 6){
+		drag.moved = true; closePeek();
+		ghost.innerHTML=''; const c = tileNode(byId[drag.id], false); ghost.appendChild(c); ghost.style.display='block';
+		document.body.style.cursor='grabbing';
+	}
+	if(drag.moved){
+		ghost.style.left = (e.clientX - geo.tw/2)+'px'; ghost.style.top = (e.clientY - geo.th/2)+'px';
+		stage.classList.toggle('over', overHouse(e));
+	}
+}
+function overHouse(e){ const r = housebox.getBoundingClientRect(); const pad = 40; return e.clientX>=r.left-pad && e.clientX<=r.right+pad && e.clientY>=r.top-pad && e.clientY<=r.bottom+pad; }
+function endDrag(e){
+	if(!drag) return;
+	const d = drag; drag = null;
+	d.t.removeEventListener('pointermove', moveDrag); d.t.removeEventListener('pointerup', endDrag); d.t.removeEventListener('pointercancel', endDrag);
+	ghost.style.display='none'; stage.classList.remove('over'); document.body.style.cursor='';
+	if(!d.moved){ openPeek(d.id, {}); return; }           // a tap is "look", not "go"
+	if(overHouse(e)) attempt(d.id, e); else { state.sel=null; refreshTiles(); }
+}
+
+/* ============================================================
+   ENGINE — a partial order, ten gates, two traps
+   ============================================================ */
+function met(need){ return need.split('|').some(id=>state.placed.has(id)); }
+function coveredBy(p){ if(p.altOf && state.placed.has(p.altOf)) return byId[p.altOf]; return PARTS.find(q=>q.altOf===p.id && state.placed.has(q.id)) || null; }
+function ready(p){ return !state.placed.has(p.id) && !state.burned.has(p.id) && !coveredBy(p) && p.needs.every(met); }
+function missing(p){ return p.needs.filter(n=>!met(n)).map(n=>n.split('|').map(id=>byId[id].short).join(' or ')); }
+
+/* ---- REVERSE: one snapshot per step that changes the house ---- */
+const past = [];
+function snap(){ return {invoice:state.invoice, ate:state.ate, placed:new Set(state.placed), passed:new Set(state.passed), burned:new Set(state.burned),
+	failedRows:new Set(state.failedRows), leaks:state.leaks, fails:state.fails}; }
+function restore(s){ state.invoice=s.invoice; state.ate=s.ate; state.placed=new Set(s.placed); state.passed=new Set(s.passed); state.burned=new Set(s.burned);
+	state.failedRows=new Set(s.failedRows); state.leaks=s.leaks; state.fails=s.fails; }
+function rebuildStamps(){
+	const s = document.getElementById('stamps'); s.innerHTML='';
+	PARTS.filter(p=>p.gate).sort((a,b)=>a.row-b.row).forEach(p=>{
+		if(state.passed.has(p.row)) stampGate(p,'pass');
+		else if(state.failedRows.has(p.row)) stampGate(p,'fail');
+	});
+}
+function reverse(){
+	const e = past.pop(); if(!e) return;
+	const p = byId[e.id];
+	const failed = p.gate && state.failedRows.has(p.row);
+	restore(e.s);
+	document.getElementById('done').classList.remove('on');
+	closePeek(); state.sel = null;
+	rebuildStamps(); deckSeek(); redraw(); refreshTiles(); score();
+	if(p.gate) say('', failed
+		? `<b>Reversed.</b> The <b>${ROWS[p.row-1].label}</b> inspection is un-called and the tile is back. On a real job you do not get this button.`
+		: `<b>Reversed.</b> The <b>${ROWS[p.row-1].label}</b> inspection is un-called. In the field a stamp is a stamp.`);
+	else say('', `<b>Reversed.</b> <b>${p.short}</b> is back on the table. On a real job that step is a demo crew and a change order.`);
+}
+document.getElementById('undo').addEventListener('click', reverse);
+window.addEventListener('keydown', ev=>{ if((ev.ctrlKey||ev.metaKey) && ev.key.toLowerCase()==='z'){ ev.preventDefault(); reverse(); } });
+
+function attempt(id, e){
+	const p = byId[id];
+	if(state.placed.has(id)){ openPeek(id,{note:'Already on the house.'}); return; }
+	if(state.burned.has(id)){ openPeek(id,{}); return; }
+	const cov = coveredBy(p);
+	if(cov){ openPeek(id, {note:`Already covered by “${cov.name}”. Two ways to do one job — you only do one.`}); return; }
+	if(!p.needs.every(met)){
+		state.leaks++; leak(e); shakeTile(id);
+		const why = `Not yet. This call still needs: ${missing(p).join(', ')}. ${p.gate? 'You are about to tell them it is fixed before you have proved anything.' : 'You are reaching for a part before you have proved which one is broken.'}`;
+		say('leak', `<b>Not yet.</b> ${why}`); openPeek(id, {leak:why});
+		score(); return;
+	}
+	past.push({s:snap(), id});                 // from here on the house changes — remember how it looked
+	if(p.gate){
+		const burn = (p.failsIf||[]).filter(t=>state.placed.has(t));
+		if(burn.length){
+			state.fails++; state.failedRows.add(p.row);
+			// you already did that work and bought that part. You do not get to bill it.
+			burn.forEach(t=>{ const b = byId[t]; state.placed.delete(t); state.burned.add(t);
+				state.invoice -= b.price||0; state.ate += b.price||0; });
+			redraw(); stampGate(p, 'fail');
+			const t = byId[burn[0]];
+			const why = `${ROWS[p.row-1].label}: CALLBACK. “${t.name}” comes out and you eat ${money(t.price||0)}. ${t.fail}`;
+			say('fail', `<b>${ROWS[p.row-1].label}: CALLBACK.</b> “${t.short}” comes out and you eat ${money(t.price||0)}. ${t.fail}`);
+			// a failed gate changes what is playable — the deck has to look again,
+			// or it strands you on a card that is no longer next
+			openPeek(t.id, {failGate:why}); deckSeek(); refreshTiles(); score(); return;
+		}
+		state.placed.add(id); state.passed.add(p.row); state.failedRows.delete(p.row); stampGate(p,'pass');
+		say('pass', `<b>${ROWS[p.row-1].label}: CLOSED.</b> ${ROWS[p.row-1].sees}`);
+		closePeek();
+		if(p.row===NG) finish();
+	} else {
+		state.placed.add(id); state.invoice += p.price||0;
+		say('', `<b>${p.short}</b>${p.price?` · $${p.price.toLocaleString()} on the ticket`:''}. ${p.law}`);
+		closePeek();
+	}
+	state.sel=null; applyShot(id); deckSeek(); redraw(); refreshTiles(); score();
+}
+function say(kind, html){ const m = document.getElementById('msg'); m.className = kind; m.innerHTML = html; }
+function shakeTile(id){ const t = document.querySelector(`.tile.big[data-id="${id}"]`) || stage.querySelector(`.tile[data-id="${id}"]`); if(!t) return; t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake'); }
+function stampGate(p, kind){
+	const s = document.getElementById('stamps');
+	let d = s.querySelector(`[data-row="${p.row}"]`);
+	if(!d){ d = el('div','stamp'); d.dataset.row = p.row; s.appendChild(d); }
+	d.className = 'stamp '+kind; d.title = `${ROWS[p.row-1].label} · ${kind==='pass'?'PASS':'FAIL'}`; d.setAttribute('aria-label', d.title);
+	d.innerHTML = `<span class="pic" style="display:block;width:22px;height:18px">${inspectorSVG(p.row, kind==='pass'?'#7fa07a':'#c46a4a')}</span>`;
+	[...s.children].sort((a,b)=>a.dataset.row-b.dataset.row).forEach(c=>s.appendChild(c));
+}
+const money = n => '$' + Math.max(0, Math.round(n)).toLocaleString('en-US');
+function score(){ document.getElementById('score').innerHTML =
+	`Calls <b>${state.passed.size}/${NG}</b> · Callbacks <b class="${state.fails?'bad':''}">${state.fails}</b>`
+	+ ` · Ate <b class="${state.ate?'bad':''}">${money(state.ate)}</b> · Invoice <b>${money(state.invoice)}</b>`; }
+function finish(){
+	const bad = state.fails;
+	const stars = (state.fails===0 && state.ate===0) ? 3 : state.fails<=1 ? 2 : 1;
+	document.getElementById('d-stars').textContent = '★'.repeat(stars)+'☆'.repeat(3-stars);
+	document.getElementById('d-title').textContent = ['Six calls closed. And you came back for most of them.','Six calls closed. One of them twice.','Six calls, six trips, nothing wasted.'][stars-1];
+	document.getElementById('d-body').innerHTML = `Six calls. You billed <b>${money(state.invoice)}</b> and you ate <b>${money(state.ate)}</b> on ${state.fails} callback${state.fails===1?'':'s'}.`
+		+ (state.ate ? ` Every one of those shortcuts saved you an hour on the day and cost you the whole job twice. The shortcut is never cheaper — it is just cheaper <i>today</i>.`
+		             : ` You tested before you replaced, every time, and you told them the number before they had to ask. That is the whole trade.`)
+		+ ` Rates are a Treasure Coast market range, not a quote — put your own sub's numbers in and play it again.`;
+	document.getElementById('done').classList.add('on');
+}
+function resetAll(){
+	state.placed.clear(); state.passed.clear(); state.burned.clear(); state.failedRows.clear(); state.leaks=0; state.fails=0; state.sel=null; past.length=0;
+	state.invoice=0; state.ate=0;
+	document.getElementById('stamps').innerHTML=''; document.getElementById('done').classList.remove('on'); closePeek(); deckIdx=0;
+	say('', '<b>47 cards, 6 calls.</b> Drag the top card onto the house. Test before you replace — every time you reach for a part you have not proved is broken, it costs you.');
+	redraw(); refreshTiles(); score();
+}
+document.getElementById('reset').addEventListener('click', resetAll);
+document.getElementById('again').addEventListener('click', resetAll);
+
+/* ============================================================
+   THE PEEK — the card, anchored to the tile, opening inward
+   ============================================================ */
+const peek = document.getElementById('peek');
+let peekLeaveTimer;
+function openPeek(id, o){
+	const p = byId[id]; const f = famById[p.fam]; const r = ROWS[p.row-1];
+	state.sel = id; refreshTiles();
+	const burned = state.burned.has(id);
+	const hideTrap = p.trap && !burned;
+	const g = hideTrap ? GRADES['1'] : GRADES[p.grade]; const gk = hideTrap ? '1' : p.grade;
+	const blocks = [];
+	if(o.leak) blocks.push(`<div class="blk fail"><h3>Not yet</h3><p>${o.leak}</p></div>`);
+	if(o.failGate) blocks.push(`<div class="blk fail"><h3>Callback</h3><p>${o.failGate}</p></div>`);
+	if(o.note) blocks.push(`<div class="blk"><h3>Note</h3><p>${o.note}</p></div>`);
+	blocks.push(`<div class="blk spec"><h3>What you do</h3><p>${p.spec}</p></div>`);
+	blocks.push(`<div class="blk fail"><h3>Fails when</h3><p>${p.fail}</p></div>`);
+	const can = !state.placed.has(id) && !burned;
+	document.getElementById('peekbody').innerHTML = `
+		<div class="bar" style="background:${f.hueTo}"></div>
+		<p class="kick">${p.gate?'Prove it':(burned?'Shortcut':'Step')} · ${f.label} · Call ${r.n} ${r.label} · ${r.code}</p>
+		${p.icon ? `<span class="pic">${p.icon==='inspector'?inspectorSVG(p.row,f.hueTo):permitSVG(f.hueTo)}</span>` : `<p class="sym" style="color:${f.hueTo}">${p.sym}</p>`}
+		<h2>${p.name}</h2>
+		<p class="meta">Card ${p.z}${p.price?` · <b style="color:var(--gold)">${money(p.price)}</b> on the ticket`:' · no charge'}${p.big?' · <span class="bigc">BIG TICKET</span>':''}${p.altOf?` · the other way is “${byId[p.altOf].short}”`:''}${state.placed.has(id)?' · done':''}</p>
+		<p class="law">${p.law}</p>
+		${blocks.join('')}
+		<span class="grade g${gk}"><b>${g[0]}</b>${g[1]}</span>
+		<p class="src">${hideTrap ? 'Looks like every other tile in its family. That is the point.' : g[2]+' Source: '+p.src}</p>
+		${can ? `<button class="eat" id="peekgo">${p.gate?'Prove it and hand it back':'Do it'}</button>` : ''}`;
+	const go = document.getElementById('peekgo'); if(go) go.addEventListener('click', ()=>attempt(id));
+	peek.classList.add('on');
+	placePeek(id);
+}
+function placePeek(id){
+	const t = document.querySelector(`.tile.big[data-id="${id}"]`) || stage.querySelector(`.tile[data-id="${id}"]`);
+	// In deck mode the ring tiles are still in the DOM but parked off to the side,
+	// so anchoring to one put this panel straight on top of the next card — you
+	// failed a gate and then could not pick up the card that fixes it.
+	const anchor = (state.mode === 'deck')
+		? (document.querySelector('#dcard .tile.big') || deckBox)
+		: t;
+	if(!anchor){ peek.style.left='50%'; peek.style.top='90px'; return; }
+	const tr = anchor.getBoundingClientRect();
+	const pw = peek.offsetWidth, ph = peek.offsetHeight;
+	const tcx = tr.left + tr.width/2, tcy = tr.top + tr.height/2;
+	const W = window.innerWidth, H = window.innerHeight;
+	let left, top;
+	if(Math.abs(tcx - W/2) > W*0.18){ left = tcx < W/2 ? tr.right + 10 : tr.left - 10 - pw; top = tcy - ph/2; }
+	else { top = tcy < H/2 ? tr.bottom + 10 : tr.top - 10 - ph; left = tcx - pw/2; }
+	left = Math.max(8, Math.min(W - pw - 8, left)); top = Math.max(8, Math.min(H - ph - 8, top));
+	// never sit on the deck — the next card has to stay grabbable
+	if(state.mode === 'deck' && deckBox){
+		const d = deckBox.getBoundingClientRect();
+		const hits = !(left+pw < d.left || left > d.right || top+ph < d.top || top > d.bottom);
+		if(hits){ if(d.right + 10 + pw <= W - 8) left = d.right + 10;
+			else if(d.top - 10 - ph >= 8) top = d.top - 10 - ph;
+			else { top = 8; left = Math.max(8, Math.min(W - pw - 8, left)); } }
+	}
+	if(left < 260 && top < 84) top = 84;   // keep the view toggle uncovered
+	peek.style.left = left+'px'; peek.style.top = top+'px';
+}
+function closePeek(){ peek.classList.remove('on'); }
+document.getElementById('peekclose').addEventListener('click', closePeek);
+peek.addEventListener('pointerenter', ()=>clearTimeout(peekLeaveTimer));
+stage.addEventListener('pointerover', e=>{
+	if(!window.matchMedia('(hover:hover)').matches) return;
+	if(e.target.closest('.tile') || e.target.closest('#peek')) { clearTimeout(peekLeaveTimer); return; }
+	clearTimeout(peekLeaveTimer); peekLeaveTimer = setTimeout(()=>{ if(!peek.matches(':hover')) closePeek(); }, 500);
+});
+window.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closePeek(); document.getElementById('chart').classList.remove('on'); document.getElementById('rates').classList.remove('on'); } });
+
+/* ============================================================
+   THE CHART — the table itself, read-only, one click away
+   ============================================================ */
+function buildTable(){
+	const grid = document.getElementById('table'); grid.innerHTML = '';
+	const cols = ['2.1rem']; const slots = [];
+	FAMS.forEach((f,i)=>{ if(i>0 && FAMS[i-1].block!==f.block){ slots.push({gutter:true}); cols.push('0.55rem'); } slots.push({fam:f}); cols.push('minmax(3.6rem,1fr)'); });
+	grid.style.gridTemplateColumns = cols.join(' ');
+	grid.appendChild(el('div'));
+	slots.forEach(s=>{ if(s.gutter){ grid.appendChild(el('div')); return; } const h = el('div','fam'); h.title = s.fam.q; h.innerHTML = `<b style="color:${s.fam.hueTo}">${s.fam.sym}</b><span>${s.fam.label}</span>`; grid.appendChild(h); });
+	ROWS.forEach(r=>{
+		const seats = {}; FAMS.forEach(f=>{ seats[f.id] = PARTS.filter(p=>p.fam===f.id && p.row===r.n).sort((a,b)=>a.z-b.z || (a.trap?1:-1)); });
+		const height = Math.max(1, ...Object.values(seats).map(a=>a.length));
+		const lab = el('div','rowlab'); lab.style.gridRow = `span ${height}`; lab.title = r.sees; lab.innerHTML = `<span>${r.n} · ${r.label}</span>`; grid.appendChild(lab);
+		for(let seat=0; seat<height; seat++) slots.forEach(s=>{ if(s.gutter){ grid.appendChild(el('div')); return; } const p = seats[s.fam.id][seat]; grid.appendChild(p ? tileNode(p,false) : el('div')); });
+	});
+	document.getElementById('legend').innerHTML = FAMS.map(f=>`<span><i style="background:${fill(f.hue,f.hueTo)}"></i>${f.label} — ${f.q}</span>`).join('');
+}
+document.getElementById('showchart').addEventListener('click', ()=>{ buildTable(); refreshTiles(); document.getElementById('chart').classList.add('on'); });
+/* ============================================================
+   THE RATES SHEET — every number in the deck, most expensive
+   first, with the source under each one. Nothing is invented
+   here and nothing here is a quote.
+   ============================================================ */
+function buildRates(){
+	const host = document.getElementById('ratebody');
+	const rows = RATES.slice().sort((a,b)=>b.hi-a.hi).map(r=>`
+		<div class="rrow${r.big?' rbig':''}">
+			<div class="rjob">${r.big?'<span class="bigc">BIG TICKET</span> ':''}${r.job}${r.unit?` <i>${r.unit}</i>`:''}</div>
+			<div class="rnum">${money(r.lo)} – ${money(r.hi)}</div>
+			<div class="rnote">${r.note||''}<span class="rsrc">${r.src}</span></div>
+		</div>`).join('');
+	host.innerHTML = `<p class="rlede">Market ranges for Florida and the Treasure Coast, gathered September 2026. They are what the work <b>goes for</b>, not what Covenant charges — put your own sub’s numbers in and every card in the deck moves with them. The six flagged lines are the ones worth saying out loud before a homeowner has to ask.</p>
+		<div class="rtable">${rows}</div>
+		<h3 class="rh">And what the county charges for the water a leak wastes</h3>
+		<div class="rtable">${WATER.map(w=>`<div class="rrow"><div class="rjob">${w[0]}</div><div class="rnum">${w[1]}</div><div class="rnote"></div></div>`).join('')}</div>
+		<p class="rsrc2">Indian River County Department of Utility Services rate booklet, effective 1 January 2025. A leak does not get billed at the bottom tier — it pushes the whole month up into the top one.</p>`;
+	document.getElementById('rates').classList.add('on');
+}
+document.getElementById('showrates').addEventListener('click', buildRates);
+document.getElementById('ratesclose').addEventListener('click', ()=>document.getElementById('rates').classList.remove('on'));
+document.getElementById('rates').addEventListener('click', e=>{ if(e.target.id==='rates') e.currentTarget.classList.remove('on'); });
+document.getElementById('chartclose').addEventListener('click', ()=>document.getElementById('chart').classList.remove('on'));
+document.getElementById('chart').addEventListener('click', e=>{ if(e.target.id==='chart') e.currentTarget.classList.remove('on'); });
+
+/* ============================================================
+   THE SCENE — a real 3D model. One unit = one foot.
+   Every part draws into a named layer group; the same `placed`
+   set that drives the ring drives what is visible.
+   Cutaway = a clipping plane through the middle of the house.
+   ============================================================ */
+const W2 = 20, D2 = 14, T = 0.67;          // half-width, half-depth, block thickness
+const SLAB = 1, WALLTOP = 9.5, BEAMTOP = 11, BC = 11.5;
+const RIDGE = 16.167, EAVEZ = 16, EAVEY = 10.833, GX = 22;
+const PITCH = Math.atan2(RIDGE - EAVEY, EAVEZ);
+const SLOPE = Math.hypot(EAVEZ, RIDGE - EAVEY);
+const IN = D2 - T;                          // inner face of the block, z
+const INX = W2 - T;                         // inner face of the block, x
+
+/* the four exterior walls, with their openings. One list, many shells. */
+const HOLES_F = [[-3,0,SLAB,8],[6,12,4,7.5]];        // front (+z): door + kitchen window
+const HOLES_B = [[-12,-6,4,7.5],[6,12,4,7.5]];       // back (-z): two bath windows
+const HOLES_L = [[-4,2,4,7.5]];                      // left (-x)
+const HOLES_R = [[-2,4,4,7.5]];                      // right (+x)
+function walls(inset){                                // inset > 0 = inward shell
+	const z = D2 - T/2 - inset, x = W2 - T/2 - inset, e = D2 - T - inset;
+	return [
+		{d:'x', at: z, a:-W2, b:W2, holes:HOLES_F},
+		{d:'x', at:-z, a:-W2, b:W2, holes:HOLES_B},
+		{d:'z', at:-x, a:-e,  b:e,  holes:HOLES_L},
+		{d:'z', at: x, a:-e,  b:e,  holes:HOLES_R},
+	];
+}
+/* an opening is a hole: split the wall into the rectangles that are left */
+function segs(a, b, y0, y1, holes){
+	const hs = (holes||[]).slice().sort((p,q)=>p[0]-q[0]); const out=[]; let x=a;
+	for(const h of hs){
+		if(h[0] > x) out.push([x, h[0], y0, y1]);
+		if(h[2] > y0) out.push([h[0], h[1], y0, h[2]]);
+		if(h[3] < y1) out.push([h[0], h[1], h[3], y1]);
+		x = Math.max(x, h[1]);
+	}
+	if(x < b) out.push([x, b, y0, y1]);
+	return out.filter(s=>s[1]-s[0] > .01 && s[3]-s[2] > .01);
+}
+
+/* ---------- renderer, scene, camera ---------- */
+let renderer, scene, camera, root, clip, raf = null, dirty = true;
+const LG = {}, MATS = {};
+let CUR = null;
+const cam = {az:0.34, el:0.26, r:60, tx:0, ty:6.4, tz:0, anim:null};
+const holder = document.getElementById('housebox');
+
+function mat(o){
+	const m = new THREE.MeshLambertMaterial(Object.assign({side:THREE.DoubleSide}, o));
+	m.userData = {op:(o&&o.opacity!==undefined)?o.opacity:1, tr:!!(o&&o.transparent), site:false};
+	(MATS[CUR] = MATS[CUR] || []).push(m);
+	return m;
+}
+function siteMat(o){ const m = mat(o); m.userData.site = true; return m; }
+function clipAll(){ /* the plumbing model x-rays the shell instead of cutting it */ }
+
+function box(w,h,d,x,y,z,m,g,rx){ const n=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), m); n.position.set(x,y,z); if(rx) n.rotation.x=rx; g.add(n); return n; }
+function cylY(r,h,x,y,z,m,g){ const n=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,12), m); n.position.set(x,y,z); g.add(n); return n; }
+function cylX(r,h,x,y,z,m,g){ const n=cylY(r,h,x,y,z,m,g); n.rotation.z=Math.PI/2; return n; }
+function cylZ(r,h,x,y,z,m,g){ const n=cylY(r,h,x,y,z,m,g); n.rotation.x=Math.PI/2; return n; }
+function strut(x, z1,y1, z2,y2, w, m, g){
+	const dz = z2-z1, dy = y2-y1, len = Math.hypot(dz,dy);
+	const n = box(w, w, len, x, (y1+y2)/2, (z1+z2)/2, m, g);
+	n.rotation.x = -Math.atan2(dy, dz); return n;
+}
+/* ⭐ the one helper this whole model is built on: a pipe from point A to point B,
+   at any angle, so a 1/8 in. per foot fall is a thing you can actually see. */
+let UP = null;                               // built on first use — the page must still load without WebGL
+function pipe(a, b, r, m, g){
+	UP = UP || new THREE.Vector3(0,1,0);
+	const d = new THREE.Vector3(b[0]-a[0], b[1]-a[1], b[2]-a[2]);
+	const len = d.length(); if(len < 1e-4) return null;
+	const n = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 12), m);
+	n.position.set((a[0]+b[0])/2, (a[1]+b[1])/2, (a[2]+b[2])/2);
+	n.quaternion.setFromUnitVectors(UP, d.clone().normalize());
+	g.add(n); return n;
+}
+function hub(p, r, m, g){ const n=new THREE.Mesh(new THREE.SphereGeometry(r,12,9), m); n.position.set(p[0],p[1],p[2]); g.add(n); return n; }
+function run(pts, r, m, g){ for(let i=1;i<pts.length;i++){ pipe(pts[i-1], pts[i], r, m, g); hub(pts[i-1], r*1.06, m, g); } hub(pts[pts.length-1], r*1.06, m, g); }
+const TCY = z => (RIDGE - .30) - Math.abs(z)/3;      // the top chord line
+function build(name, fn){ const g=new THREE.Group(); g.visible=false; root.add(g); LG[name]=g; CUR=name; fn(g); CUR=null; }
+
+/* ---------- canvas textures (no external files) ---------- */
+function makeTex(draw, size){
+	const c=document.createElement('canvas'); c.width=c.height=size||128;
+	draw(c.getContext('2d'), c.width);
+	const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
+}
+const TX = {};
+function textures(){
+	TX.block = makeTex((c,s)=>{ c.fillStyle='#8f8d88'; c.fillRect(0,0,s,s); c.strokeStyle='#6f6d68'; c.lineWidth=3;
+		c.beginPath(); c.moveTo(0,s-1.5); c.lineTo(s,s-1.5); c.moveTo(s/2,0); c.lineTo(s/2,s); c.stroke();
+		c.fillStyle='rgba(255,255,255,.05)'; for(let i=0;i<200;i++) c.fillRect(Math.random()*s,Math.random()*s,2,2); });
+	TX.stucco = makeTex((c,s)=>{ c.fillStyle='#ddd2bb'; c.fillRect(0,0,s,s);
+		for(let i=0;i<900;i++){ c.fillStyle=Math.random()>.5?'rgba(0,0,0,.05)':'rgba(255,255,255,.08)'; c.fillRect(Math.random()*s,Math.random()*s,2,2);} });
+	TX.shingle = makeTex((c,s)=>{ c.fillStyle='#4f4a48'; c.fillRect(0,0,s,s);
+		c.fillStyle='#443f3d'; c.fillRect(0,s/2,s,s/2); c.strokeStyle='#2c2827'; c.lineWidth=4;
+		c.beginPath(); c.moveTo(0,s-2); c.lineTo(s,s-2); c.moveTo(0,s/2); c.lineTo(s,s/2); c.moveTo(s/2,s/2); c.lineTo(s/2,s); c.stroke(); });
+	TX.ply = makeTex((c,s)=>{ c.fillStyle='#d3ad74'; c.fillRect(0,0,s,s); c.strokeStyle='#b08a55'; c.lineWidth=2;
+		for(let i=0;i<9;i++){ c.beginPath(); c.moveTo(0,i*s/8+Math.sin(i)*3); c.bezierCurveTo(s/3,i*s/8+6,2*s/3,i*s/8-6,s,i*s/8); c.stroke(); } });
+	TX.board = makeTex((c,s)=>{ c.fillStyle='#e6e1d6'; c.fillRect(0,0,s,s); c.strokeStyle='#cfc9bc'; c.lineWidth=2;
+		c.strokeRect(1,1,s-2,s-2); });
+	TX.tile = makeTex((c,s)=>{ c.fillStyle='#d9d2c4'; c.fillRect(0,0,s,s); c.strokeStyle='#c2b9a7'; c.lineWidth=4; c.strokeRect(0,0,s,s); });
+	TX.sod = makeTex((c,s)=>{ c.fillStyle='#3f6b33'; c.fillRect(0,0,s,s);
+		for(let i=0;i<600;i++){ c.fillStyle=Math.random()>.5?'#4f7d3e':'#365c2c'; c.fillRect(Math.random()*s,Math.random()*s,3,3);} });
+	TX.soil = makeTex((c,s)=>{ c.fillStyle='#2e241b'; c.fillRect(0,0,s,s);
+		for(let i=0;i<700;i++){ c.fillStyle=Math.random()>.5?'#3a2d22':'#241c15'; c.fillRect(Math.random()*s,Math.random()*s,4,4);} });
+}
+function texMat(t, w, h, tileW, tileH, extra){
+	const tt = t.clone(); tt.needsUpdate = true;
+	tt.wrapS = tt.wrapT = THREE.RepeatWrapping;
+	tt.repeat.set(Math.max(.4, w/tileW), Math.max(.4, h/tileH));
+	return mat(Object.assign({map:tt}, extra||{}));
+}
+function shellW(list, y0, y1, th, tex, tileW, tileH, g, extra){
+	list.forEach(w=>{
+		segs(w.a, w.b, y0, y1, w.holes).forEach(s=>{
+			const len = s[1]-s[0], hgt = s[3]-s[2];
+			const m = tex ? texMat(tex, len, hgt, tileW, tileH, extra) : mat(extra);
+			if(w.d==='x') box(len, hgt, th, (s[0]+s[1])/2, (s[2]+s[3])/2, w.at, m, g);
+			else          box(th, hgt, len, w.at, (s[2]+s[3])/2, (s[0]+s[1])/2, m, g);
+		});
+	});
+}
+function roof(thick, lift, m, g, x0, x1){
+	x0 = x0===undefined ? -GX : x0; x1 = x1===undefined ? GX : x1;
+	[1,-1].forEach(s=>{
+		const n = box(x1-x0, thick, SLOPE, (x0+x1)/2, (EAVEY+RIDGE)/2 + lift, s*EAVEZ/2, m, g);
+		n.rotation.x = s*PITCH;
+	});
+}
+function roofTex(t, tileW, tileH, extra){ return texMat(t, GX*2, SLOPE, tileW, tileH, extra); }
+/* the height of the roof plane over a point, so a vent can stand 6 in. above it */
+const ROOFY = z => EAVEY + (EAVEZ - Math.abs(z)) * (RIDGE - EAVEY) / EAVEZ;
+
+/* the little man with the magnifying glass */
+function numTex(n){ return makeTex((c,s)=>{ c.clearRect(0,0,s,s);
+	c.beginPath(); c.arc(s/2, s/2, s*0.40, 0, 7); c.fillStyle='rgba(10,12,18,.90)'; c.fill();
+	c.lineWidth = s*0.065; c.strokeStyle='#d4a24c'; c.stroke();
+	c.fillStyle='#f4ecd8'; c.font='bold '+(s*0.46)+'px Iowan Old Style,Palatino,Georgia,serif';
+	c.textAlign='center'; c.textBaseline='middle'; c.fillText(String(n), s/2, s/2 + s*0.03); }, 128); }
+function person(n, g){
+	const skin = mat({color:'#e8dcc8'}), coat = mat({color:'#cfd6dd'});
+	const p = new THREE.Group();
+	const body = new THREE.Mesh(new THREE.CylinderGeometry(.75,.95,3.4,10), coat); body.position.y=1.7; p.add(body);
+	const head = new THREE.Mesh(new THREE.SphereGeometry(.62,12,10), skin); head.position.y=3.9; p.add(head);
+	const arm = new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,1.7,8), coat); arm.position.set(1.0,2.6,.5); arm.rotation.z=-.9; p.add(arm);
+	const ring = new THREE.Mesh(new THREE.TorusGeometry(.62,.13,8,18), mat({color:'#d4a24c'})); ring.position.set(1.9,3.1,.6); p.add(ring);
+	const lens = new THREE.Mesh(new THREE.CircleGeometry(.6,18), mat({color:'#9fc4e8', transparent:true, opacity:.45})); lens.position.copy(ring.position); p.add(lens);
+	const spr = new THREE.Sprite(new THREE.SpriteMaterial({map:numTex(n), transparent:true, depthTest:false}));
+	spr.scale.set(4.2,4.2,1); spr.position.set(0, 6.6 + (n%3)*1.9, 0); p.add(spr);
+	MATS[CUR].push(spr.material); spr.material.userData={op:1,tr:true,site:true};
+	g.add(p); return p;
+}
+
+/* ============================================================
+   THE PLAN — data, not code paths. Move a fixture here and the
+   drain, the stub, the trap arm, the vent and the trim all move.
+   ============================================================ */
+const PARTS_W = [
+	{d:'x', at:-5,  a:-W2+T, b:13},          // the wet wall, across the back
+	{d:'z', at:-6,  a:-D2+T, b:-5},          // master bath / hall
+	{d:'z', at:1,   a:-D2+T, b:-5},          // hall / hall bath
+	{d:'z', at:13,  a:-D2+T, b:-5},          // hall bath far side
+	{d:'x', at:5,   a:-W2+T, b:-2},          // laundry & water heater
+	{d:'z', at:-2,  a:-5, b:5},              // spine
+	{d:'z', at:6,   a:5, b:D2-T},            // kitchen
+];
+/* the drain tree, node by node. [x, y, z] — y is the fall you can see. */
+const ND = {
+	bl :[-17.5,-0.95,-6.4], tub:[-16.0,-0.99,-6.4], wc1:[-11.0,-1.10,-6.4],
+	lv1:[ -7.6,-1.18,-6.4], j1 :[ -2.0,-1.30,-6.4], lv2:[  0.0,-1.26,-6.4],
+	wc2:[  3.2,-1.19,-6.4], sh :[  8.5,-1.05,-6.4], br :[  9.8,-1.02,-6.4],
+	tubD:[-16.0,-0.90,-10.0], shD:[8.5,-0.96,-10.0],
+	j2 :[ -2.0,-1.62, 6.5], j3 :[ -2.0,-1.75,11.6], out:[-2.0,-1.82,14.0],
+	wshB:[-18.2,-1.30, 6.5], ksB:[9.0,-1.52,11.6], kend:[12.5,-1.45,11.6],
+	co :[ -2.0,-2.90,26.0], tap:[-2.0,-3.90,36.0],
+};
+const R4 = .46, R3 = .34, R2 = .25;          // 4 in., 3 in., 2 in. — exaggerated so they read
+/* every stub-up: the node it rises from, its size, and what sits on it */
+const STUBS = [
+	{n:'wc1', r:R3, k:'wc'},  {n:'lv1', r:R2, k:'lav'}, {n:'tubD', r:R2, k:'tub'},
+	{n:'wc2', r:R3, k:'wc'},  {n:'lv2', r:R2, k:'lav'}, {n:'shD', r:R2, k:'sh'},
+	{n:'ksB', r:R2, k:'ks'},  {n:'wshB', r:R2, k:'wsh'},
+];
+const TOP = SLAB + 0.55;                     // where a capped stub stands
+/* the two vents that go out through the roof, and the fixtures each gathers */
+const VENTS = [{x:-6.0, z:-3.0}, {x:7.0, z:-3.0}];
+const WHP = [-17.0, 9.6];                    // the water heater
+const METER = [14.0, 26.0];                  // the water meter box at the line
+const GASM = [W2 + 1.0, -6.0];               // the gas meter, on the right wall
+
+/* ============================================================
+   THE FIXER SCENE — the same house as the build model, five
+   years later and lived in. Every card gets one layer, keyed by
+   its own id, so a new card needs a SCENE entry and nothing else.
+   ============================================================ */
+const RED = '#c46a4a', GRN = '#7fa07a', AMB = '#d4a24c', BLU = '#4f86c6', SND = '#c4a574';
+
+/* a pin you can find at any zoom: a ball at the fault, a stalk, a ring on top */
+function pin(x, y, z, col, g, h){
+	const m = mat({color:col}); h = h || 3.2;
+	cylY(.09, h, x, y + h/2, z, m, g);
+	const r = new THREE.Mesh(new THREE.TorusGeometry(.75,.11,8,20), m);
+	r.position.set(x, y + h, z); r.rotation.x = Math.PI/2; g.add(r);
+	const s = new THREE.Mesh(new THREE.SphereGeometry(.42,10,8), m); s.position.set(x,y,z); g.add(s);
+}
+/* a number that always faces you, through the walls */
+function plate(txt, x, y, z, g, col){
+	const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160;
+	const c = cv.getContext('2d');
+	c.fillStyle = '#12182B'; c.fillRect(0,0,512,160);
+	c.strokeStyle = col || SND; c.lineWidth = 9; c.strokeRect(7,7,498,146);
+	c.fillStyle = col || SND; c.textAlign = 'center'; c.textBaseline = 'middle';
+	let px = 70; c.font = '700 ' + px + 'px Iowan Old Style, Palatino, Georgia, serif';
+	while(c.measureText(txt).width > 450 && px > 14){ px -= 2; c.font = '700 ' + px + 'px Iowan Old Style, Palatino, Georgia, serif'; }
+	c.fillText(txt, 256, 86);
+	const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv), transparent:true, depthTest:false}));
+	sp.scale.set(8.6, 2.7, 1); sp.position.set(x, y, z); g.add(sp);
+	(MATS[CUR] = MATS[CUR] || []).push(sp.material);   // a Tell card is only a plate — its group may not exist yet
+	sp.material.userData = {op:1, tr:true, site:true};
+}
+function drip(x,y,z,col,g,n){ const m = mat({color:col, transparent:true, opacity:.8});
+	for(let i=0;i<(n||3);i++){ const s = new THREE.Mesh(new THREE.SphereGeometry(.22,8,6), m);
+		s.position.set(x, y - i*0.7, z); s.scale.y = 1.5; g.add(s); } }
+function who(n, x, z, g){ const p = person(n, g); p.position.set(x, SLAB, z);
+	p.rotation.y = Math.atan2(-x, -z) + 0.4; MATS[CUR].forEach(m=>m.userData.site = true); }
+
+/* where each call happens — this is the whole map of the model */
+const WC1 = [-11, SLAB, -7.3], TANK1 = [-11, SLAB + 1.9, -5.5];     // master toilet
+const KS  = [9, SLAB, 11.4], KTRAP = [9, SLAB + 1.6, 11.4];          // kitchen sink
+const WH  = [WHP[0], SLAB, WHP[1]];                                  // water heater
+const WC2 = [3.2, SLAB, -7.3], TANK2 = [3.2, SLAB + 1.9, -5.5];      // guest toilet
+const CO  = [ND.co[0], 0, ND.co[2]];                                 // cleanout at the line
+const BIBB = [6, SLAB + 1.8, D2 + .4];                               // front hose bibb
+const ROOTZ = 30.5;                                                  // forty feet out
+
+const SCENE = {
+/* ---------------- CALL 1 — the running toilet ---------------- */
+c1:  g=>who(1, -17.5, -11.5, g),
+l1a: g=>{ box(1.8,.3,1.0, -13.4, SLAB + .15, -5.6, mat({color:'#f4f2ec'}), g);   // the lid, off and leaning
+          pin(TANK1[0], TANK1[1] + 1.1, TANK1[2], BLU, g, 1.6); },
+l1b: g=>{ box(1.5,1.2,.7, TANK1[0], TANK1[1], TANK1[2], mat({color:'#2f6fb5', transparent:true, opacity:.75}), g);
+          plate('DYE IN · 15 MIN', TANK1[0], TANK1[1] + 4.2, TANK1[2], g, BLU); },
+f1:  g=>{ const m = mat({color:RED});                                            // a pitted seat and a dead flapper
+          const r = new THREE.Mesh(new THREE.TorusGeometry(.55,.13,8,18), m);
+          r.position.set(TANK1[0], TANK1[1] - .7, TANK1[2]); r.rotation.x = Math.PI/2; g.add(r);
+          cylY(.5,.1, TANK1[0], TANK1[1] - .5, TANK1[2], mat({color:'#7a4030'}), g);
+          drip(WC1[0], WC1[1] + 1.0, WC1[2], BLU, g, 4);
+          pin(TANK1[0], TANK1[1], TANK1[2], RED, g, 3.4); },
+x1:  g=>{ const m = mat({color:GRN});
+          const r = new THREE.Mesh(new THREE.TorusGeometry(.55,.13,8,18), m);
+          r.position.set(TANK1[0], TANK1[1] - .7, TANK1[2]); r.rotation.x = Math.PI/2; g.add(r);
+          cylY(.5,.12, TANK1[0], TANK1[1] - .5, TANK1[2], m, g);
+          box(.7,.5,.7, -13.8, SLAB + .25, -6.6, mat({color:'#6f7fb5'}), g); },  // the tablet basket, in the bin
+x1t: g=>{ cylY(.5,.12, TANK1[0], TANK1[1] - .5, TANK1[2], mat({color:AMB}), g);  // new flapper
+          const r = new THREE.Mesh(new THREE.TorusGeometry(.55,.13,8,18), mat({color:RED}));
+          r.position.set(TANK1[0], TANK1[1] - .7, TANK1[2]); r.rotation.x = Math.PI/2; g.add(r);   // seat still pitted
+          box(.6,.35,.6, TANK1[0] + .9, TANK1[1] + .5, TANK1[2], mat({color:'#6f7fb5'}), g); },    // tablet still in it
+t1:  g=>plate('$670 A YEAR', TANK1[0], TANK1[1] + 5.4, TANK1[2], g),
+p1:  g=>{ plate('CLEAR AT 15 MIN', WC1[0], WC1[1] + 5.6, WC1[2], g, GRN);
+          cylY(.85,.12, WC1[0], WC1[1] + 1.15, WC1[2], mat({color:'#eaf2fb', transparent:true, opacity:.8}), g); },
+
+/* ---------------- CALL 2 — the kitchen sink ---------------- */
+c2:  g=>who(2, 13, 9, g),
+l2a: g=>{ [['tubD',BLU],['shD',BLU],['wc1',BLU],['wc2',BLU],['wshB',BLU]].forEach(([n,c])=>{
+            const p = ND[n]; cylY(.28, 1.4, p[0], SLAB + .7, p[2], mat({color:c, transparent:true, opacity:.7}), g); });
+          plate('EVERYTHING ELSE CLEARS', 0, SLAB + 8, -6.4, g, BLU); },
+l2b: g=>{ box(5.4,2.6,.15, KS[0], SLAB + 1.4, 10.3, mat({color:'#3a2c1e'}), g);   // the cabinet, open
+          pin(KTRAP[0], KTRAP[1], KTRAP[2], BLU, g, 2.6); },
+f2:  g=>{ const m = mat({color:'#c9c2ad'});                                       // grease in the branch
+          const b = new THREE.Mesh(new THREE.SphereGeometry(.85,12,9), m);
+          b.position.set(2, ND.ksB[1], 11.6); b.scale.set(2.6,1,1); g.add(b);
+          pin(2, ND.ksB[1], 11.6, RED, g, 4.6); },
+x2:  g=>{ pipe([ND.kend[0], ND.kend[1], 11.6], [ND.j3[0], ND.j3[1], 11.6], R2 + .06,
+            mat({color:GRN, transparent:true, opacity:.65}), g);                  // the whole branch, cut clean
+          cylZ(.55,.9, 2, ND.ksB[1], 11.6, mat({color:GRN}), g);
+          cylY(.24, 2.2, KS[0], SLAB + 3.6, 12.0, mat({color:RED, transparent:true, opacity:.6}), g); },
+x2t: g=>{ const m = mat({color:'#c9c2ad'});
+          const b = new THREE.Mesh(new THREE.SphereGeometry(.85,12,9), m);
+          b.position.set(2, ND.ksB[1], 11.6); b.scale.set(2.6,1,1); g.add(b);
+          pipe([0.4, ND.ksB[1], 11.6], [3.6, ND.ksB[1], 11.6], .09, mat({color:AMB}), g);  // one pencil hole
+          pin(2, ND.ksB[1], 11.6, AMB, g, 4.6); },
+t2:  g=>plate('$600–$1,400 TO JET', KS[0], SLAB + 7.4, 11.4, g),
+p2:  g=>{ plate('BOTH BOWLS AT ONCE', KS[0], SLAB + 5.6, 11.4, g, GRN);
+          [-1.2, 1.2].forEach(o=>box(1.8,.4,1.5, KS[0] + o, SLAB + 2.75, 11.4, mat({color:BLU, transparent:true, opacity:.7}), g)); },
+
+/* ---------------- CALL 3 — no hot water ---------------- */
+c3:  g=>who(3, -13, 7, g),
+l3a: g=>{ box(1.6,2.4,.5, INX - .5, SLAB + 4.6, 6, mat({color:'#9aa0a6'}), g);    // the panel
+          box(1.0,.7,.2, INX - .9, SLAB + 4.6, 6, mat({color:RED}), g);           // the tag
+          plate('BREAKER OFF · TESTED DEAD', INX - 4, SLAB + 8, 6, g, RED); },
+l3b: g=>{ box(1.5,2.2,.7, WH[0] + 3.4, SLAB + 2.6, WH[1], mat({color:'#d8b23a'}), g);  // the meter
+          [[-1,'#c46a4a'],[1,'#161410']].forEach(([o,c])=>
+            pipe([WH[0] + 2.8, SLAB + 2.6, WH[1] + o*.4], [WH[0] + 1.45, SLAB + 1.4, WH[1] + o*.4], .07, mat({color:c}), g)); },
+f3:  g=>{ pin(WH[0] + 1.45, SLAB + 1.4, WH[1], RED, g, 4.2);                      // lower element, open
+          cylY(1.3, .9, WH[0], SLAB + 1.0, WH[1], mat({color:'#8a8274'}), g);      // sediment in the bottom
+          plate('LOWER ELEMENT OPEN · 12 YRS', WH[0], SLAB + 9.2, WH[1], g, RED); },
+x3:  g=>{ pin(WH[0] + 1.45, SLAB + 1.4, WH[1], GRN, g, 4.2);
+          cylY(1.28, .9, WH[0], SLAB + 1.0, WH[1], mat({color:'#dbe6ef', transparent:true, opacity:.8}), g);
+          cylY(.14, 1.4, WH[0] - 1.9, SLAB + .7, WH[1] + 1.6, mat({color:'#8a8274'}), g); },  // what came out
+x3t: g=>{ const bright = mat({color:'#f2f5f8'});
+          cylY(1.52, 5.2, WH[0], SLAB + 3.0, WH[1], bright, g);                    // a whole new tank
+          cylY(1.0, .45, WH[0], SLAB + 5.8, WH[1], bright, g);
+          plate('$1,850 · SOLD', WH[0], SLAB + 9.6, WH[1], g, AMB);
+          pin(WH[0], SLAB + 6.4, WH[1], AMB, g, 2.4); },
+t3:  g=>plate('$1,200–$2,400 · BUDGET 2 YRS', WH[0], SLAB + 11.2, WH[1], g),
+p3:  g=>{ plate('120°F AT THE FAR SHOWER', 8.5, SLAB + 8.4, -9.6, g, GRN);
+          cylY(.2, 5.4, 8.5, SLAB + 4.2, -9.6, mat({color:RED, transparent:true, opacity:.55}), g); },
+
+/* ---------------- CALL 4 — the dripping pipe ---------------- */
+c4:  g=>who(4, -12.5, 12, g),
+l4a: g=>{ const stl = mat({color:'#b9c0c7'});
+          const f = new THREE.Mesh(new THREE.TorusGeometry(.95,.16,8,20), stl);
+          f.position.set(BIBB[0], BIBB[1] + 1.4, BIBB[2] + .9); f.rotation.y = Math.PI/2; g.add(f);
+          cylY(.16, 1.4, BIBB[0], BIBB[1] + .7, BIBB[2] + .9, stl, g);
+          box(.08,.7,.08, BIBB[0], BIBB[1] + 1.7, BIBB[2] + 1.0, mat({color:RED}), g);
+          plate('62 psi  →  140 psi', BIBB[0], BIBB[1] + 5.6, BIBB[2] + 1, g, RED); },
+f4:  g=>{ pin(WH[0] + 1.7, SLAB + .9, WH[1], RED, g, 4.6);
+          drip(WH[0] + 1.7, SLAB + .5, WH[1], BLU, g, 5);
+          pin(METER[0], .8, METER[1], RED, g, 3.4);
+          plate('CLOSED SYSTEM · NO TANK', WH[0], SLAB + 9.6, WH[1], g, RED); },
+x4:  g=>{ const t = mat({color:GRN}), brk = mat({color:'#b9c0c7'});
+          cylY(1.0, 2.0, WH[0] + .1, SLAB + 7.4, WH[1] + 1.4, t, g);
+          cylY(.13, 1.2, WH[0] + .1, SLAB + 6.0, WH[1] + 1.4, mat({color:'#6f92b8'}), g);
+          box(.2,1.6,1.6, WH[0] - 1.0, SLAB + 7.4, WH[1] + 1.4, brk, g);
+          plate('PRE-CHARGED TO 62', WH[0], SLAB + 11.0, WH[1] + 1.4, g, GRN); },
+x4t: g=>{ cylY(.3, 1.1, WH[0] + 1.7, SLAB + 3.0, WH[1], mat({color:AMB}), g);      // a shiny new relief valve
+          drip(WH[0] + 1.7, SLAB + .5, WH[1], AMB, g, 5);
+          plate('NEW VALVE · STILL DRIPS', WH[0], SLAB + 9.6, WH[1], g, AMB); },
+t4:  g=>plate('PRV $300–$650', METER[0], 6.5, METER[1], g),
+p4:  g=>{ plate('62 psi · HOLDS', BIBB[0], BIBB[1] + 5.6, BIBB[2] + 1, g, GRN);
+          box(.08,.7,.08, BIBB[0], BIBB[1] + 1.7, BIBB[2] + 1.0, mat({color:GRN}), g); },
+
+/* ---------------- CALL 5 — the sewer smell ---------------- */
+c5:  g=>who(5, 9.5, -12, g),
+l5a: g=>{ box(1.2,1.6,1.2, 1.2, SLAB + .8, -9.5, mat({color:'#dbe6ef'}), g);       // the jug
+          [ND.lv2, ND.shD, ND.wc2].forEach(p=>
+            cylY(.3, 1.2, p[0], SLAB + .6, p[2] - (p===ND.wc2 ? .9 : 0), mat({color:BLU, transparent:true, opacity:.75}), g));
+          plate('A GALLON IN EVERY TRAP', 3.2, SLAB + 7.6, -9.5, g, BLU); },
+l5b: g=>{ const b = box(2.0,.25,2.0, WC2[0], SLAB + .12, WC2[2], mat({color:AMB}), g);
+          b.rotation.z = .05;
+          pin(WC2[0], SLAB + .3, WC2[2], BLU, g, 3.4);
+          plate('IT ROCKS', WC2[0], SLAB + 6.0, WC2[2], g, BLU); },
+f5:  g=>{ const r = new THREE.Mesh(new THREE.TorusGeometry(1.0,.16,8,20), mat({color:RED}));
+          r.position.set(WC2[0], SLAB + .08, WC2[2]); r.rotation.x = Math.PI/2; g.add(r);
+          cylY(1.05, .22, WC2[0], SLAB - .16, WC2[2], mat({color:'#7a4030'}), g);   // the flange, under the tile
+          pin(WC2[0], SLAB + .2, WC2[2], RED, g, 4.4);
+          plate('FLANGE 3/8 IN. LOW', WC2[0], SLAB + 7.2, WC2[2], g, RED); },
+x5:  g=>{ const r = new THREE.Mesh(new THREE.TorusGeometry(1.0,.2,8,20), mat({color:GRN}));
+          r.position.set(WC2[0], SLAB + .2, WC2[2]); r.rotation.x = Math.PI/2; g.add(r);
+          cylY(1.05, .3, WC2[0], SLAB + .15, WC2[2], mat({color:GRN}), g);
+          box(1.9,.9,1.9, WC2[0], SLAB + .45, WC2[2], mat({color:'#f4f2ec'}), g); },
+x5t: g=>{ const r = new THREE.Mesh(new THREE.TorusGeometry(1.15,.13,8,24), mat({color:AMB}));
+          r.position.set(WC2[0], SLAB + .06, WC2[2]); r.rotation.x = Math.PI/2; g.add(r);   // a bead all the way round
+          drip(WC2[0], SLAB - .3, WC2[2], RED, g, 5);                                       // and it runs where nobody looks
+          plate('SEALED IN', WC2[0], SLAB + 6.4, WC2[2], g, AMB); },
+t5:  g=>plate('RUN IT MONTHLY', WC2[0], SLAB + 8.6, WC2[2], g),
+p5:  g=>{ plate('SIX FLUSHES · NOTHING', WC2[0], SLAB + 6.6, WC2[2], g, GRN);
+          cylY(.9,.12, WC2[0], SLAB + 1.16, WC2[2], mat({color:'#eaf2fb', transparent:true, opacity:.8}), g); },
+
+/* ---------------- CALL 6 — everything backing up ---------------- */
+c6:  g=>who(6, 4.5, 21.5, g),
+l6a: g=>{ cylY(R4 + .2, .3, CO[0] + 2.2, .2, CO[2] - 1.4, mat({color:AMB}), g);     // the cap, off and on the grass
+          cylY(R4 - .04, Math.abs(ND.co[1]) - .5, CO[0], ND.co[1] + (Math.abs(ND.co[1]) - .5)/2, CO[2],
+            mat({color:'#6b5a3a', transparent:true, opacity:.85}), g);              // full to the top, house side
+          plate('FULL ON THE HOUSE SIDE', CO[0], 6.8, CO[2], g, RED); },
+l6b: g=>{ box(1.6,1.6,.5, CO[0] + 2.6, 1.0, CO[2], mat({color:'#3f4247'}), g);      // the reel
+          pipe([CO[0], ND.co[1] + .3, CO[2]], [CO[0], -3.3, ROOTZ], .1, mat({color:AMB}), g);
+          pin(CO[0], -3.3, ROOTZ, AMB, g, 4.2);
+          plate('40 FT', CO[0], 3.2, ROOTZ, g, AMB); },
+f6:  g=>{ const m = mat({color:'#8a6a3a'});                                          // the root mass at the joint
+          for(let i=0;i<26;i++){ const a = i/26*Math.PI*2, r = .55 + (i%3)*.35;
+            pipe([CO[0], -3.3, ROOTZ], [CO[0] + Math.cos(a)*r*1.6, -3.3 + Math.sin(a)*r, ROOTZ + (i%5-2)*.35], .055, m, g); }
+          const b = new THREE.Mesh(new THREE.SphereGeometry(.7,10,8), mat({color:'#6a5128'}));
+          b.position.set(CO[0], -3.3, ROOTZ); g.add(b);
+          pin(CO[0], -3.3, ROOTZ, RED, g, 5.0);
+          plate('ROOTS AT A JOINT', CO[0], 4.2, ROOTZ, g, RED); },
+x6:  g=>{ pipe([CO[0], ND.co[1], CO[2]], [CO[0], -3.7, ND.tap[2]], R4 + .08,
+            mat({color:GRN, transparent:true, opacity:.6}), g);
+          const m = mat({color:BLU, transparent:true, opacity:.75});                 // the jet
+          for(let i=0;i<16;i++){ const s = new THREE.Mesh(new THREE.SphereGeometry(.16,6,5), m);
+            s.position.set(CO[0] + (Math.random()-.5)*1.4, -3.3 + (Math.random()-.5)*1.2, ROOTZ + (i-8)*.32); g.add(s); }
+          plate('CUT AND JETTED', CO[0], 4.4, ROOTZ, g, GRN); },
+x6t: g=>{ const m = mat({color:'#8a6a3a'});
+          for(let i=0;i<20;i++){ const a = i/20*Math.PI*2, r = .7 + (i%3)*.3;
+            pipe([CO[0] + Math.cos(a)*.5, -3.3 + Math.sin(a)*.5, ROOTZ], [CO[0] + Math.cos(a)*r*1.6, -3.3 + Math.sin(a)*r, ROOTZ + (i%5-2)*.35], .055, m, g); }
+          pipe([CO[0], -3.3, ROOTZ - 1.2], [CO[0], -3.3, ROOTZ + 1.2], .18, mat({color:AMB}), g);
+          pin(CO[0], -3.3, ROOTZ, AMB, g, 5.0);
+          plate('A HOLE THROUGH IT', CO[0], 4.4, ROOTZ, g, AMB); },
+t6:  g=>plate('$2,000–$10,000 TO REPLACE', CO[0], 8.2, CO[2], g),
+p6:  g=>{ plate('WHOLE HOUSE AT ONCE', 0, SLAB + 13, 0, g, GRN);
+          const m = mat({color:BLU, transparent:true, opacity:.7});
+          STUBS.forEach(s=>{ const p = ND[s.n]; cylY(s.r, 1.6, p[0], SLAB + .8, p[2], m, g); }); },
+};
+
+/* ============================================================
+   THE LAYERS — the finished house, then one layer per card
+   ============================================================ */
+function buildAll(){
+	/* ---- the site, always there ---- */
+	const site = new THREE.Group(); root.add(site); CUR='site';
+	box(200, .22, 11, 0, .11, 42, mat({color:'#5b5854'}), site);              // the street
+	MATS.site.forEach(m=>m.userData.site = true);
+	// ⭐ The ground is its own material group so X-ray can take it to glass.
+	// Three of the seven steps happen under the slab; behind an opaque lawn you
+	// cannot see any of them, which makes the first half of the model useless.
+	CUR = 'pad';
+	const sod = new THREE.Mesh(new THREE.PlaneGeometry(300,300), texMat(TX.sod, 300,300, 6,6));
+	sod.rotation.x = -Math.PI/2; sod.position.y = -0.06; site.add(sod);
+	const soil = new THREE.Mesh(new THREE.PlaneGeometry(78, 84), texMat(TX.soil, 78,84, 8,8));
+	soil.rotation.x = -Math.PI/2; soil.position.set(0, -0.02, 3); site.add(soil);   // the working pad
+	box(78, 7.0, 84, 0, -3.55, 3, mat({color:'#241c15'}), site);              // what you are digging in
+	MATS.pad.forEach(m=>m.userData.site = true);
+	CUR = null;
+
+	build('permit', g=>{                                     // the job sign goes up with the permit
+		const W = 640, H = 400;
+		const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+		const c = cv.getContext('2d');
+		const fit = (txt, size, maxW, y, font, colour, track)=>{      // shrink until it fits the board
+			let px = size;
+			for(;;){ c.font = font.replace('@', px); c.letterSpacing = track + 'px';
+				if(c.measureText(txt).width <= maxW || px < 8) break; px -= 1; }
+			c.fillStyle = colour; c.textAlign = 'center'; c.fillText(txt, W/2, y); c.letterSpacing = '0px';
+		};
+		c.fillStyle = '#12182B'; c.fillRect(0,0,W,H);
+		c.strokeStyle = '#c4a574'; c.lineWidth = 5; c.strokeRect(14,14,W-28,H-28);
+		c.save(); c.translate(W/2 - 27, 46); c.scale(.37,.37);         // the crown, traced from the logo
+		c.beginPath(); c.moveTo(11,116); c.lineTo(2,55); c.lineTo(45,66); c.lineTo(73,3);
+		c.lineTo(101,66); c.lineTo(145,55); c.lineTo(136,116); c.closePath();
+		c.lineWidth = 15; c.lineJoin = 'miter'; c.strokeStyle = '#c4a574'; c.stroke(); c.restore();
+		c.strokeStyle = '#c4a574'; c.lineWidth = 3;
+		c.beginPath(); c.moveTo(64,74); c.lineTo(W/2-46,74); c.moveTo(W/2+46,74); c.lineTo(W-64,74); c.stroke();
+		fit('COVENANT BUILDERS', 54, W-90, 186, '600 @px Iowan Old Style, Palatino, Georgia, serif', '#e9e7e2', 8);
+		fit('WE DELIVER', 26, W-190, 232, '500 @px Helvetica, Arial, sans-serif', '#c4a574', 13);
+		c.strokeStyle = 'rgba(175,157,128,.45)'; c.lineWidth = 2;
+		c.beginPath(); c.moveTo(W/2-120,268); c.lineTo(W/2+120,268); c.stroke();
+		fit('CBC1253676  ·  (772) 473-7115', 25, W-120, 312, '500 @px Helvetica, Arial, sans-serif', '#9b9284', 1);
+		fit('Vero Beach · Sebastian · Fort Pierce · Port St. Lucie', 19, W-90, 348, '400 @px Helvetica, Arial, sans-serif', '#6e6960', 1);
+		const face = new THREE.CanvasTexture(cv);
+		const blank = siteMat({color:'#0d1220'}), signm = siteMat({map:face});
+		const SW = 9, SH = SW*H/W, YAW = -0.34;
+		const board = new THREE.Mesh(new THREE.BoxGeometry(SW,SH,.3), [blank,blank,blank,blank,signm,blank]);
+		board.position.set(-26, 7.4, 20); board.rotation.y = YAW; g.add(board);
+		const ax = Math.cos(YAW), az = -Math.sin(YAW);
+		const bx = Math.sin(YAW), bz = Math.cos(YAW);
+		const post = siteMat({color:'#6f6a62'});
+		[-3.3, 3.3].forEach(o=>cylY(.2, 11, -26 + ax*o - bx*0.5, 5.5, 20 + az*o - bz*0.5, post, g));
+		MATS.permit.forEach(m=>m.userData.site = true);
+	});
+
+	/* ---- step 1 ---- */
+	build('layout', g=>{
+		const chalk = mat({color:'#cfc7b5'}), mark = mat({color:'#e08a3c'}), flag = mat({color:'#e06fa3'});
+		PARTS_W.forEach(w=>{ const len=w.b-w.a, c=(w.a+w.b)/2;
+			if(w.d==='z') box(.42,.04,len,w.at,.06,c,chalk,g); else box(len,.04,.42,c,.06,w.at,chalk,g); });
+		// plain strips, not shellW — shellW splits a wall around its door and window
+		// openings, and at 3/4 in. tall that turns every opening into a 1 ft. panel
+		[[0, D2-T/2],[0,-(D2-T/2)]].forEach(([x,z])=>box(W2*2, .05, .42, x, .07, z, chalk, g));
+		[[W2-T/2,0],[-(W2-T/2),0]].forEach(([x,z])=>box(.42, .05, (D2-T)*2, x, .07, z, chalk, g));
+		STUBS.forEach(s=>{ const p = ND[s.n]; cylY(.55,.08,p[0],.10,p[2],mark,g); });
+		[[-W2-5,-D2-5],[W2+5,-D2-5],[-W2-5,D2+5],[W2+5,D2+5]].forEach(([x,z])=>{
+			cylY(.09,4,x,2,z,mat({color:'#d8d0c2'}),g); box(1.4,.7,.05,x+.7,3.7,z,flag,g); });
+	});
+
+	build('tapin', g=>{
+		const pvc = siteMat({color:'#cfc7b5'}), cap = siteMat({color:'#c46a4a'});
+		const dirt = siteMat({color:'#171009', transparent:true, opacity:.5});
+		box(5, 3.6, 26, ND.co[0], -1.9, 25, dirt, g);                       // the lateral trench
+		cylX(.9, 110, 0, -4.4, ND.tap[2], siteMat({color:'#8d8b86'}), g);   // the main under the street
+		run([ND.tap, ND.co, ND.out], R4, pvc, g);                           // the lateral, falling to the tap
+		cylY(R4+.06, Math.abs(ND.co[1]) + .35, ND.co[0], (ND.co[1]+.2)/2, ND.co[2], pvc, g);  // the cleanout riser
+		cylY(R4+.16, .35, ND.co[0], .26, ND.co[2], cap, g);                 // the cap, at grade
+	});
+
+	/* ---- step 2 ---- */
+	build('bdrain', g=>{
+		const pvc = mat({color:'#cfc7b5'});
+		const dirt = mat({color:'#171009', transparent:true, opacity:.45});
+		box(W2*2-2, 1.9, 3.2, -4, -1.0, -6.4, dirt, g);                     // the trenches
+		box(3.2, 2.0, D2*2-4, ND.j1[0], -1.1, 4, dirt, g);
+		run([ND.bl, ND.tub, ND.wc1, ND.lv1, ND.j1], R3, pvc, g);            // back branch, both ways to the main
+		run([ND.br, ND.sh, ND.wc2, ND.lv2, ND.j1], R3, pvc, g);
+		run([ND.tubD, ND.tub], R2, pvc, g);                                 // the tub and the shower spurs
+		run([ND.shD, ND.sh], R2, pvc, g);
+		run([ND.j1, ND.j2, ND.j3, ND.out], R4, pvc, g);                     // the main, falling to the front
+		run([ND.wshB, ND.j2], R2, pvc, g);                                  // laundry
+		run([ND.kend, ND.ksB, ND.j3], R2, pvc, g);                          // kitchen
+	});
+
+	build('branch', g=>{                                     // a wye and an eighth bend: the flow turns downstream
+		const swept = mat({color:'#dcd6c8'});
+		STUBS.forEach(s=>{ const p = ND[s.n];
+			pipe(p, [p[0], p[1]+.95, p[2]+0.95], s.r, swept, g);            // the 45° throat, pointing downstream
+			hub(p, s.r*1.5, swept, g); });
+		[ND.j1, ND.j2, ND.j3].forEach(p=>hub(p, R4*1.5, swept, g));
+	});
+	build('santee', g=>{                                     // the lie: a tee on its back. Same stubs, wrong throat.
+		const flat = mat({color:'#d8d2c4'});
+		STUBS.forEach(s=>{ const p = ND[s.n];
+			box(s.r*3.4, s.r*2.2, s.r*3.4, p[0], p[1]+.45, p[2], flat, g);  // a square shoulder, square entry
+			pipe(p, [p[0], p[1]+.95, p[2]], s.r, flat, g); });
+		[ND.j1, ND.j2, ND.j3].forEach(p=>hub(p, R4*1.5, flat, g));
+	});
+
+	build('stubs', g=>{
+		const pvc = mat({color:'#cfc7b5'}), cap = mat({color:'#c46a4a'});
+		STUBS.forEach(s=>{ const p = ND[s.n];
+			cylY(s.r, TOP - p[1], p[0], (p[1]+TOP)/2, p[2], pvc, g);
+			cylY(s.r+.07, .3, p[0], TOP + .12, p[2], cap, g); });
+	});
+
+	build('utest', g=>{
+		const pvc = mat({color:'#cfc7b5'});
+		const water = mat({color:'#4f86c6', transparent:true, opacity:.55});
+		const H = 10.6;                                                      // a ten-foot head on the lowest joint
+		cylY(R3, H, ND.j1[0]-1.2, ND.j1[1] + H/2, ND.j1[2], pvc, g);
+		cylY(R3-.05, H-.5, ND.j1[0]-1.2, ND.j1[1] + H/2, ND.j1[2], water, g);
+		[[ND.bl,ND.j1,R3],[ND.br,ND.j1,R3],[ND.j1,ND.out,R4],[ND.wshB,ND.j2,R2],[ND.kend,ND.j3,R2]]
+			.forEach(([a,b,r])=>pipe(a,b,r-.05,water,g));
+		STUBS.forEach(s=>{ const p=ND[s.n]; cylY(s.r-.05, TOP-p[1]-.4, p[0], (p[1]+TOP)/2, p[2], water, g); });
+	});
+
+	/* ---- step 3 ---- */
+	build('protect', g=>{
+		const sleeve = mat({color:'#c9c3b5', transparent:true, opacity:.6});
+		const stake = mat({color:'#8b6b4d'}), flag = mat({color:'#e08a3c'});
+		STUBS.forEach(s=>{ const p = ND[s.n];
+			cylY(s.r+.22, 1.9, p[0], .35, p[2], sleeve, g);
+			box(.16, 2.4, .16, p[0]+s.r+.5, 1.2, p[2], stake, g);
+			box(.1, .55, .6, p[0], TOP + .55, p[2], flag, g); });
+	});
+
+	/* ---- step 4 ---- */
+	build('shell', g=>{
+		box(W2*2, 1, D2*2, 0, .5, 0, texMat(TX.stucco, 40,28, 14,14, {color:'#b9b5ad'}), g);
+		shellW(walls(0), SLAB, WALLTOP, T, TX.block, 1.33, .67, g);
+		shellW(walls(0), WALLTOP, BEAMTOP, T, TX.stucco, 8, 8, g, {color:'#a8a49c'});
+		const pre = mat({color:'#9d9b96'});
+		[[HOLES_F, D2-T/2],[HOLES_B, -(D2-T/2)]].forEach(([hs,at])=>hs.forEach(h=>
+			box(h[1]-h[0]+1.4, .8, T+.05, (h[0]+h[1])/2, h[3]+.4, at, pre, g)));
+	});
+
+	build('wservice', g=>{
+		const cold = siteMat({color:'#6f92b8'});
+		const dirt = siteMat({color:'#171009', transparent:true, opacity:.5});
+		const bx = siteMat({color:'#9aa0a6'}), tape = siteMat({color:'#4f86c6'}), wire = siteMat({color:'#c9a83a'});
+		box(3.4, 2.4, METER[1] - 12, METER[0], -1.2, (METER[1]+12)/2, dirt, g);
+		box(2.6, 1.3, 3.4, METER[0], .55, METER[1], bx, g);                  // the meter box at the line
+		box(2.2, .12, 3.0, METER[0], 1.24, METER[1], siteMat({color:'#d8d0c2'}), g);
+		run([[METER[0],-1.55,METER[1]-1.6],[METER[0],-1.62,13.0]], .18, cold, g);
+		box(.9, .02, METER[1]-14, METER[0], -0.7, (METER[1]+13)/2, tape, g); // warning tape over it
+		cylZ(.05, METER[1]-14, METER[0]+.5, -1.45, (METER[1]+13)/2, wire, g);// the tracer wire
+		const in2 = mat({color:'#6f92b8'});
+		cylY(.18, 4.4, METER[0], SLAB + 1.4, 12.6, in2, g);                  // up through the slab
+		box(.5,.5,.5, METER[0], SLAB + 3.5, 12.6, mat({color:'#b9c0c7'}), g);// the main shutoff
+	});
+
+	/* ---- step 5 ---- */
+	build('shell2', g=>{
+		const wood = mat({color:'#c9a26b'}), web = mat({color:'#b08a55'});
+		for(let x=-W2; x<=W2; x+=4){
+			box(.3,.5,D2*2+1, x, BC-.25, 0, wood, g);
+			[1,-1].forEach(s=>{ strut(x, s*EAVEZ, TCY(EAVEZ), 0, TCY(0), .34, wood, g);
+				strut(x, s*9.3, BC, s*4.7, TCY(4.7), .26, web, g); });
+			strut(x, 0, BC, 0, TCY(0)-.2, .28, web, g);
+		}
+		roof(.30, .38, roofTex(TX.ply, 8, 4), g);
+		roof(.12, .60, roofTex(TX.stucco, 20, 20, {color:'#46525f'}), g);
+		roof(.18, .80, roofTex(TX.shingle, 3, 1), g);
+		box(GX*2, .45, 1.7, 0, RIDGE+.92, 0, mat({color:'#3a3534'}), g);
+		[1,-1].forEach(s=>{ const sh = new THREE.Shape();
+			sh.moveTo(-D2-.5, BC-.5); sh.lineTo(D2+.5, BC-.5); sh.lineTo(0, RIDGE-.2); sh.closePath();
+			const m2 = new THREE.Mesh(new THREE.ShapeGeometry(sh), texMat(TX.ply, 28,5, 8,4));
+			m2.rotation.y = s*Math.PI/2; m2.position.x = s*W2; g.add(m2); });
+	});
+
+	build('shell3', g=>{
+		const plate = mat({color:'#6d7d3a'}), stud = mat({color:'#c9a26b'});
+		PARTS_W.forEach(w=>{
+			const len = w.b - w.a, c = (w.a+w.b)/2;
+			const th = (w.d==='x' && w.at===-5) ? .62 : .42;                 // the wet wall is built deeper on purpose
+			if(w.d==='z'){ box(th,.3,len,w.at,SLAB+.15,c,plate,g); box(th,.5,len,w.at,BEAMTOP-.25,c,stud,g);
+				for(let z=w.a+.7; z<w.b; z+=1.33) box(th,BEAMTOP-SLAB-.8,.28,w.at,(SLAB+BEAMTOP)/2,z,stud,g); }
+			else { box(len,.3,th,c,SLAB+.15,w.at,plate,g); box(len,.5,th,c,BEAMTOP-.25,w.at,stud,g);
+				for(let x=w.a+.7; x<w.b; x+=1.33) box(.28,BEAMTOP-SLAB-.8,th,x,(SLAB+BEAMTOP)/2,w.at,stud,g); }
+		});
+		const f = mat({color:'#6d7d3a'});
+		walls(T + .075).forEach(w=>{ for(let a=w.a+.5; a<w.b; a+=1.33){
+			if((w.holes||[]).some(h=>a>h[0]-.3 && a<h[1]+.3)) continue;
+			if(w.d==='x') box(.28, BEAMTOP-SLAB, .15, a, (SLAB+BEAMTOP)/2, w.at, f, g);
+			else box(.15, BEAMTOP-SLAB, .28, w.at, (SLAB+BEAMTOP)/2, a, f, g); } });
+	});
+
+	build('dwvwall', g=>{
+		const pvc = mat({color:'#cfc7b5'});
+		STUBS.forEach(s=>{
+			const p = ND[s.n], wall = (s.k==='ks') ? 12.2 : (s.k==='wsh') ? 5.0 : -5.0;
+			const dz = (s.k==='ks') ? -1 : (s.k==='wsh') ? -1 : 1;           // which way the wall faces
+			const zt = wall + dz*0.35;                                       // the tee, inside the wall
+			const yt = SLAB + (s.k==='wc' ? .35 : s.k==='tub' || s.k==='sh' ? .45 : 1.9);
+			cylY(s.r, yt - TOP + .6, p[0], (TOP + yt)/2, p[2], pvc, g);      // up out of the slab
+			if(s.k==='wc'){                                                  // the closet bend
+				pipe([p[0], yt, p[2]], [p[0], yt+.5, p[2]], s.r, pvc, g);
+				cylY(s.r*1.5, .18, p[0], yt+.68, p[2], mat({color:'#c9c6c0'}), g);
+			} else {
+				run([[p[0], yt, p[2]], [p[0], yt + Math.abs(zt-p[2])*0.021, zt]], s.r, pvc, g);   // the trap arm, 1/4 in. per foot
+				cylY(s.r, 1.6, p[0], yt + .8, zt, pvc, g);                   // the sanitary tee in the wall
+			}
+		});
+	});
+
+	build('stackco', g=>{
+		const pvc = mat({color:'#cfc7b5'}), brass = mat({color:'#c9a24c'});
+		cylY(R4, 2.2, ND.j1[0], SLAB + 1.1, -5.35, pvc, g);
+		cylZ(R4*1.1, 1.1, ND.j1[0], SLAB + 1.5, -4.6, pvc, g);
+		cylZ(R4*1.35, .3, ND.j1[0], SLAB + 1.5, -4.0, brass, g);             // the plug you can actually reach
+	});
+
+	build('vents', g=>{
+		const pvc = mat({color:'#cfc7b5'});
+		STUBS.forEach(s=>{
+			if(s.k==='wc') return;                                           // the closets vent through the stack
+			const p = ND[s.n], wall = (s.k==='ks') ? 12.2 : (s.k==='wsh') ? 5.0 : -5.0;
+			const dz = (s.k==='ks') ? -1 : (s.k==='wsh') ? -1 : 1;
+			const zt = wall + dz*0.35;
+			cylY(s.r*0.8, BEAMTOP - SLAB - 2.4, p[0], SLAB + 3.5, zt, pvc, g);  // dry vent, above the flood rim
+		});
+		cylY(R3, BEAMTOP - SLAB - 1.4, ND.j1[0], SLAB + 3.3, -5.35, pvc, g);    // the stack carries on up
+		VENTS.forEach(v=>{                                                      // gathered in the attic
+			cylZ(R2, 8, v.x, BC + 1.4, v.z, pvc, g);
+			cylX(R2, 12, v.x + (v.x<0?-5:5), BC + 1.4, v.z, pvc, g);
+			cylY(R3, 2.0, v.x, BC + .6, v.z, pvc, g); });
+	});
+	build('vroof', g=>{
+		const pvc = mat({color:'#cfc7b5'}), boot = mat({color:'#3a3534'});
+		VENTS.forEach(v=>{
+			const rs = ROOFY(v.z) + .92, top = rs + .55, y0 = BC + .6;           // rs = the shingle surface
+			cylY(R2, top - y0, v.x, (y0 + top)/2, v.z, pvc, g);                  // up and 6 in. proud of the roof
+			cylY(R2*2.8, .16, v.x, rs + .06, v.z, boot, g); });                   // the boot, sealed into the dry-in
+	});
+	build('vattic', g=>{
+		const pvc = mat({color:'#cfc7b5'}), cap = mat({color:'#c46a4a'});
+		VENTS.forEach(v=>{ cylY(R2, 2.6, v.x, BC + 2.8, v.z, pvc, g);
+			cylY(R2+.07, .3, v.x, BC + 4.2, v.z, cap, g); });                    // six caps in an attic
+	});
+
+	build('supply', g=>{
+		const cold = mat({color:'#6f92b8'}), hot = mat({color:'#c46a4a'}), man = mat({color:'#b9c0c7'});
+		box(2.6, 3.4, .7, METER[0]-2.4, SLAB + 4.2, 12.5, man, g);              // the manifold
+		cylZ(.16, 11, METER[0]-2.4, BC - .4, 7, cold, g);
+		cylZ(.16, 11, METER[0]-2.4, BC - .8, 7, hot, g);
+		cylX(.16, 34, -3, BC - .4, 1.4, cold, g);                               // the trunks, in the attic
+		cylX(.16, 34, -3, BC - .8, 0.8, hot, g);
+		STUBS.forEach(s=>{
+			if(s.k==='wc'){ cylY(.13, BC - SLAB - 2.6, ND[s.n][0], SLAB + 2.6, -5.0, cold, g); return; }
+			const p = ND[s.n], wall = (s.k==='ks') ? 12.2 : (s.k==='wsh') ? 5.0 : -5.0;
+			[[-.35, cold],[.35, hot]].forEach(([o,m])=>
+				cylY(.13, BC - SLAB - 2.2, p[0] + o, SLAB + 2.8, wall, m, g)); });
+		cylY(.16, 5.5, WHP[0], SLAB + 3.2, WHP[1], cold, g);
+		cylY(.16, 5.5, WHP[0] + .9, SLAB + 3.2, WHP[1], hot, g);
+	});
+	build('valves', g=>{
+		const body = mat({color:'#c9a24c'}), plate = mat({color:'#b9c0c7'});
+		[[-16.0,-5.0],[8.5,-5.0]].forEach(([x,z])=>{
+			box(1.5, 1.5, .9, x, SLAB + 4.0, z, body, g);
+			cylZ(.22, 1.1, x, SLAB + 4.0, z + .8, plate, g);
+			cylY(.16, 4.6, x, SLAB + 6.6, z, mat({color:'#c46a4a'}), g); });      // the riser to the head
+	});
+	build('plates', g=>{
+		const steel = mat({color:'#9aa0a6'});
+		STUBS.forEach(s=>{ const p = ND[s.n], wall = (s.k==='ks') ? 12.2 : (s.k==='wsh') ? 5.0 : -5.0;
+			[SLAB + .3, BEAMTOP - .45].forEach(y=>{
+				box(1.5, .9, .07, p[0], y, wall + .33, steel, g);
+				box(1.5, .9, .07, p[0], y, wall - .33, steel, g); }); });
+	});
+	build('pan', g=>{
+		const liner = mat({color:'#3b3f44'}), water = mat({color:'#4f86c6', transparent:true, opacity:.6});
+		box(4.6, .2, 4.6, 8.5, SLAB + .12, -9.6, liner, g);
+		[[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx,dz])=>
+			box(dx?.2:4.6, 1.2, dz?.2:4.6, 8.5 + dx*2.3, SLAB + .75, -9.6 + dz*2.3, liner, g));
+		box(4.3, .55, 4.3, 8.5, SLAB + .5, -9.6, water, g);                      // 2 in. at the threshold
+	});
+	build('gauges', g=>{
+		const stl = mat({color:'#b9c0c7'}), face = mat({color:'#f4f2ec'}), needle = mat({color:'#c46a4a'});
+		[[ND.j1[0] - 1.4, -5.0],[METER[0]-2.4, 12.5]].forEach(([x,z],i)=>{
+			cylY(.18, 3.2, x, SLAB + 5.4, z, stl, g);
+			const f = cylZ(.75, .22, x, SLAB + 7.1, z + .4, face, g);
+			box(.1, .6, .1, x, SLAB + 7.35, z + .55, needle, g); });
+	});
+
+	/* ---- step 6 ---- */
+	build('gas', g=>{
+		const bi = mat({color:'#3f4247'}), yel = mat({color:'#d4a24c'}), bxm = siteMat({color:'#9aa0a6'});
+		box(2.4, 2.6, 1.6, GASM[0] + .9, 3.4, GASM[1], bxm, g);                   // the meter, outside
+		cylY(.16, 3.4, GASM[0] + .9, 1.7, GASM[1] - .8, siteMat({color:'#d4a24c'}), g);
+		cylX(.16, 4.0, GASM[0] - 1.0, 4.2, GASM[1], yel, g);                      // through the wall
+		cylY(.16, BC - 4.2, INX - .6, (BC + 4.2)/2, GASM[1], bi, g);
+		cylZ(.16, 20, INX - .6, BC - .5, 2, bi, g);                               // along the attic
+		cylX(.16, 34, 0, BC - .5, 11.5, bi, g);
+		[[WHP[0], WHP[1]],[12, 11.5]].forEach(([x,z])=>{                          // heater and range
+			cylY(.16, BC - SLAB - 3.4, x, SLAB + 4.2, z, bi, g);
+			cylY(.16, 1.1, x, SLAB + 2.0, z, bi, g);                              // the drip leg
+			box(.5,.5,.5, x, SLAB + 3.1, z, mat({color:'#c9a24c'}), g); });        // the shutoff
+	});
+	build('gauge2', g=>{
+		const stl = mat({color:'#b9c0c7'}), face = mat({color:'#f4f2ec'}), needle = mat({color:'#c46a4a'});
+		cylY(.16, 2.6, INX - .6, 6.0, GASM[1] + 1.6, stl, g);
+		cylZ(.8, .24, INX - .6, 7.3, GASM[1] + 1.9, face, g);
+		box(.1, .64, .1, INX - .72, 7.6, GASM[1] + 2.05, needle, g);
+	});
+
+	/* ---- step 7 ---- */
+	build('closed', g=>{
+		shellW(walls(T + .22), SLAB, BEAMTOP, .12, TX.board, 4, 8, g);
+		const ceil = new THREE.Mesh(new THREE.PlaneGeometry(INX*2-.4, IN*2-.4), texMat(TX.board, 40,28, 4,8));
+		ceil.rotation.x = Math.PI/2; ceil.position.y = BEAMTOP - .06; g.add(ceil);
+		PARTS_W.forEach(w=>{ const len=w.b-w.a, c=(w.a+w.b)/2, th = (w.d==='x' && w.at===-5) ? .38 : .27;
+			[-1,1].forEach(s=>{ if(w.d==='z') box(.12,BEAMTOP-SLAB,len,w.at+s*th,(SLAB+BEAMTOP)/2,c,texMat(TX.board,len,10,4,8),g);
+				else box(len,BEAMTOP-SLAB,.12,c,(SLAB+BEAMTOP)/2,w.at+s*th,texMat(TX.board,len,10,4,8),g); }); });
+		const tile = new THREE.Mesh(new THREE.PlaneGeometry(INX*2-.5, IN*2-.5), texMat(TX.tile, 40,28, 2,2));
+		tile.rotation.x = -Math.PI/2; tile.position.y = SLAB + .06; g.add(tile);
+	});
+
+	build('wheater', g=>{
+		const stl = mat({color:'#d9dee4'}), pan = mat({color:'#b9c0c7'}), tpr = mat({color:'#c46a4a'});
+		box(4.2, .35, 4.2, WHP[0], SLAB + .17, WHP[1], pan, g);                   // the pan, 1½ in. deep
+		[[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx,dz])=>
+			box(dx?.2:4.2, .5, dz?.2:4.2, WHP[0]+dx*2.1, SLAB + .3, WHP[1]+dz*2.1, pan, g));
+		cylY(1.4, 5.0, WHP[0], SLAB + 2.9, WHP[1], stl, g);
+		cylY(.9, .4, WHP[0], SLAB + 5.6, WHP[1], stl, g);
+		cylY(.16, 4.4, WHP[0] + 1.7, SLAB + 3.0, WHP[1], tpr, g);                 // the relief line, downhill
+		cylY(.16, .9, WHP[0] + 1.7, SLAB + .7, WHP[1], tpr, g);                   // ends 6 in. off the floor, open
+		cylY(.13, .6, WHP[0] - 1.9, SLAB + .5, WHP[1], mat({color:'#b9c0c7'}), g);// the pan drain, 3/4 in.
+		cylX(.13, 3.4, WHP[0] - 3.4, SLAB + .35, WHP[1], mat({color:'#b9c0c7'}), g);
+	});
+	build('etank', g=>{
+		const t = mat({color:'#2f5f8f'}), brk = mat({color:'#b9c0c7'});
+		cylY(1.0, 2.0, WHP[0] + .1, SLAB + 7.4, WHP[1] + 1.4, t, g);
+		cylY(.13, 1.2, WHP[0] + .1, SLAB + 6.0, WHP[1] + 1.4, mat({color:'#6f92b8'}), g);
+		box(.2, 1.6, 1.6, WHP[0] - 1.0, SLAB + 7.4, WHP[1] + 1.4, brk, g);
+	});
+	build('toilets', g=>{
+		const por = mat({color:'#f4f2ec'}), seat = mat({color:'#e6e3da'});
+		[ND.wc1, ND.wc2].forEach(p=>{
+			box(1.6,1.6,.8, p[0], SLAB + 1.9, -5.5, por, g);                      // the tank against the wall
+			box(1.3,.9,1.5, p[0], SLAB + .55, -6.5, por, g);
+			const bowl = new THREE.Mesh(new THREE.SphereGeometry(.85,14,10), por);
+			bowl.scale.y = .55; bowl.position.set(p[0], SLAB + .85, -7.3); g.add(bowl);
+			cylY(.88, .1, p[0], SLAB + 1.16, -7.3, seat, g);
+			cylY(.18, .7, p[0] - 1.0, SLAB + .35, -5.8, mat({color:'#b9c0c7'}), g); });
+	});
+	build('lavs', g=>{
+		const por = mat({color:'#f4f2ec'}), cab = mat({color:'#7a5c3a'}), top = mat({color:'#c9c6c0'});
+		const chr = mat({color:'#c9ccd0'});
+		[ND.lv1, ND.lv2].forEach(p=>{
+			box(3.4,2.6,1.9, p[0], SLAB + 1.3, -6.1, cab, g);
+			box(3.7,.22,2.1, p[0], SLAB + 2.7, -6.1, top, g);
+			const b = new THREE.Mesh(new THREE.SphereGeometry(.8,14,10), por);
+			b.scale.y = .45; b.position.set(p[0], SLAB + 2.6, -6.1); g.add(b);
+			cylY(.14, .8, p[0], SLAB + 3.1, -5.6, chr, g);
+			cylY(.13, .9, p[0], SLAB + 1.9, -6.1, chr, g);                        // the P-trap
+			cylZ(.13, .9, p[0], SLAB + 1.5, -5.9, chr, g); });
+		box(5.5,2.8,2.2, ND.ksB[0], SLAB + 1.4, 11.4, cab, g);                    // the kitchen run
+		box(5.8,.25,2.4, ND.ksB[0], SLAB + 2.9, 11.4, top, g);
+		box(4.2,.5,1.8, ND.ksB[0], SLAB + 2.8, 11.4, mat({color:'#c9ccd0'}), g);
+		cylY(.14, 1.4, ND.ksB[0], SLAB + 3.6, 12.0, chr, g);
+		box(2.6,2.8,2.2, ND.kend[0], SLAB + 1.4, 11.4, mat({color:'#c9ccd0'}), g);// the dishwasher
+		run([[ND.kend[0], SLAB + 2.6, 11.4],[ND.ksB[0]+1.4, SLAB + 3.4, 11.4],
+		     [ND.ksB[0]+1.0, SLAB + 1.9, 11.4]], .1, chr, g);                     // the high loop
+	});
+	build('hosebibb', g=>{
+		const br = siteMat({color:'#c9a24c'}), vb = siteMat({color:'#9aa0a6'});
+		[[6, D2 + .4, 1],[-6, -D2 - .4, -1]].forEach(([x,z,s])=>{
+			cylZ(.13, 1.1, x, SLAB + 1.8, z + s*.5, br, g);
+			cylY(.22, .5, x, SLAB + 2.2, z + s*.9, vb, g);
+			box(.7,.5,.16, x, SLAB + 1.8, z, br, g); });
+	});
+	build('washer', g=>{
+		const bx = mat({color:'#e6e3da'}), pvc = mat({color:'#cfc7b5'}), chr = mat({color:'#c9ccd0'});
+		const p = ND.wshB;
+		box(1.8, 1.8, .5, p[0], SLAB + 3.2, 4.75, bx, g);                         // the box in the wall
+		[[-.45,'#c46a4a'],[.45,'#6f92b8']].forEach(([o,c])=>
+			cylZ(.13, .7, p[0] + o, SLAB + 3.3, 5.1, mat({color:c}), g));
+		cylY(.21, 2.6, p[0], SLAB + 2.4, 4.9, pvc, g);                            // the standpipe, 18–42 in.
+		cylY(.21, .8, p[0], SLAB + .9, 4.9, pvc, g);
+		cylZ(.21, .9, p[0], SLAB + .9, 5.3, pvc, g);                              // the trap, 6–18 in. up
+		box(3.0, 3.4, 3.0, p[0] + .4, SLAB + 1.7, 3.0, mat({color:'#dcdfe3'}), g);
+	});
+	build('walkwet', g=>{
+		const w = mat({color:'#4f86c6', transparent:true, opacity:.65});
+		STUBS.forEach(s=>{ const p = ND[s.n], z = (s.k==='ks') ? 11.4 : (s.k==='wsh') ? 4.9 : -6.6;
+			cylY(s.r*0.8, .5, p[0], SLAB + 1.5, z, w, g); });                      // every trap, wet
+		cylY(.09, 2.0, ND.ksB[0], SLAB + 2.6, 12.0, w, g);                         // water running at the far faucet
+		cylY(.09, 2.0, ND.lv1[0], SLAB + 2.2, -5.6, w, g);
+	});
+
+	/* every fixer card gets one layer, keyed by its own id */
+	Object.keys(SCENE).forEach(k => { build(k, SCENE[k]);
+		LG[k].traverse(o=>{ if(o.isSprite) o.userData.callmark = true; }); });
+}
+
+/* ============================================================
+   VISIBILITY — the same `placed` set, in three dresses
+   ============================================================ */
+const L = layer => PARTS.some(p=>p.layer===layer && state.placed.has(p.id));
+const OVERRIDE = {
+	f2:  ()=> L('f2')  && !L('x2') && !L('x2t'),    // the grease goes when you cut it out
+	f3:  ()=> L('f3')  && !L('x3') && !L('x3t'),    // the sediment goes when you flush it
+	f4:  ()=> L('f4')  && !L('x4') && !L('x4t'),    // one of these two fixes stops the drip
+	f6:  ()=> L('f6')  && !L('x6') && !L('x6t'),    // the roots go when you cut them
+	l1b: ()=> L('l1b') && !L('p1'),                 // the dye clears at the proof
+	l4a: ()=> L('l4a') && !L('p4'),                 // the gauge reads again at the proof
+	l6a: ()=> L('l6a') && !L('p6'),
+	l5b: ()=> L('l5b') && !L('x5') && !L('x5t'),
+};
+/* the house is finished and lived in — the shell and every system the build
+   model installed is simply there from card one. The only thing missing is the
+   expansion tank, and that absence is call 4. */
+const ALWAYS = new Set(['shell','shell2','shell3','closed','bdrain','branch','stubs','tapin',
+	'wservice','dwvwall','stackco','vents','vroof','supply','valves','plates','gas',
+	'wheater','toilets','lavs','hosebibb','washer']);
+/* the shell is context, not the lesson — in X-ray it goes to glass so you can
+   see the pipe inside it. HOUSE cut the model in half with a clipping plane;
+   that hides half the plumbing, so this model ghosts instead of cuts. */
+const SHELLY = new Set(['shell','shell2','shell3','closed','pad']);
+
+function redraw(){
+	if(!renderer) return;
+	for(const name in LG) LG[name].visible = ALWAYS.has(name) ? true : (OVERRIDE[name] ? OVERRIDE[name]() : L(name));
+	callMarks();
+	applyView();
+}
+/* Six calls leave six sets of signs standing in the house. Only the call you are
+   on gets to shout — everything you already closed keeps its pipe and loses its
+   placard, or by call five the screen is a wall of numbers. */
+function callMarks(){
+	const open = PARTS.find(p=>p.gate && !state.placed.has(p.id));
+	const row = open ? open.row : ROWS.length;
+	PARTS.forEach(p=>{ const g = LG[p.layer]; if(!g) return;
+		g.traverse(o=>{ if(o.userData && o.userData.callmark) o.visible = (p.row === row); }); });
+}
+
+function applyView(){
+	if(!renderer) return;
+	const v = state.view;
+	renderer.localClippingEnabled = false;
+	const lit = new Set();
+	if(v === 'fault'){
+		// everything you have already done on THIS call, plus what the proof checks
+		const open = PARTS.find(p=>p.gate && !state.placed.has(p.id));
+		const row = open ? open.row : ROWS.length;
+		PARTS.filter(p=>p.row===row && state.placed.has(p.id)).forEach(p=>lit.add(p.layer));
+		(open ? open.lit : []).forEach(x=>lit.add(x));
+	}
+	for(const name in MATS){
+		const on = v !== 'fault' || lit.has(name) || name==='site';
+		const ghost = (v !== 'room') && SHELLY.has(name);
+		MATS[name].forEach(m=>{
+			m.transparent = m.userData.tr || !on || ghost;
+			m.opacity = !on ? 0.07 : ghost ? 0.14 : m.userData.op;
+			m.depthWrite = !(ghost || !on);
+			if(m.emissive) m.emissive.setHex(v==='inspector' && lit.has(name) ? 0x554013 : 0x000000);
+			m.needsUpdate = true;
+		});
+	}
+	dirty = true;
+}
+document.querySelectorAll('.toggle button').forEach(b=>b.addEventListener('click', ()=>{
+	document.querySelectorAll('.toggle button').forEach(x=>x.classList.toggle('on', x===b));
+	state.view = b.dataset.view; applyView();
+	const p = {xray:[cam.az,cam.el,cam.r,cam.tx,cam.ty,cam.tz], room:[0.95,0.18,68,0,6,0], fault:[cam.az,cam.el,cam.r,cam.tx,cam.ty,cam.tz]}[state.view];
+	flyTo(p[0], p[1], p[2], p[3], p[4], p[5]);
+	say('', state.view==='room' ? '<b>The room.</b> What the homeowner sees. A pitted seat, a flange under the tile and roots at forty feet all look exactly like this.'
+		: state.view==='fault' ? '<b>The fault.</b> Only this call is lit — what you have found so far and what the proof has to show. Everything else in the house goes dark.'
+		: '<b>X-ray.</b> The slab, the block and the drywall go to glass. The fault is usually the thing you cannot see from the room.');
+}));
+
+/* ============================================================
+   CAMERA — drag to spin, scroll to zoom, pinch on a phone
+   ============================================================ */
+function place(){
+	const ce = Math.max(-1.35, Math.min(1.45, cam.el));
+	camera.position.set(cam.tx + cam.r*Math.sin(cam.az)*Math.cos(ce),
+	                    cam.ty + cam.r*Math.sin(ce),
+	                    cam.tz + cam.r*Math.cos(cam.az)*Math.cos(ce));
+	camera.lookAt(cam.tx, cam.ty, cam.tz);
+	dirty = true;
+}
+function flyTo(az, el, r, tx, ty, tz){
+	cam.anim = {az0:cam.az, el0:cam.el, r0:cam.r, az, el, r,
+		tx0:cam.tx, ty0:cam.ty, tz0:cam.tz,
+		tx:(tx===undefined?cam.tx:tx), ty:(ty===undefined?cam.ty:ty), tz:(tz===undefined?cam.tz:tz),
+		t0:performance.now(), ms:650};
+}
+/* The yard sign, the sewer tap at the street, the meter box and the gas meter all
+   stand well outside the shot that frames the house — so those moves used to change
+   nothing you could see. A card may name its own shot; everything else flies home. */
+const HOME = [0.34, 0.26, 60, 0, 6.4, 0];
+/* one shot per call, so every card lands you in the room it happens in */
+const CAM = {
+	1: [-2.50, 0.30, 30, -11, 3.5, -7.0],   // master bath — stand behind the back-left corner
+	2: [ 0.80, 0.30, 30,   9, 3.5, 11.4],   // kitchen — front right
+	3: [-0.85, 0.28, 30, -17, 3.5,  9.6],   // water heater — front left
+	4: [-0.85, 0.26, 34, -13, 3.0, 10.5],   // the heater and the meter together
+	5: [ 2.60, 0.30, 30, 3.2, 3.5, -7.3],   // guest bath — behind the back-right corner
+	6: [-1.35, 0.40, 38,  -2,-1.5, 28.0],   // along the lateral from the side, not over the street
+};
+let inShot = null;
+function applyShot(id){
+	const p = byId[id];
+	if(p && CAM[p.row]){ inShot = p.row; flyTo.apply(null, CAM[p.row]); return; }
+	if(inShot){ inShot = null; flyTo.apply(null, HOME); }
+}
+function orbitInit(){
+	const c = renderer.domElement; let p = null, pinch = 0;
+	c.style.touchAction = 'none';
+	c.addEventListener('pointerdown', e=>{ p = {x:e.clientX, y:e.clientY}; cam.anim=null; c.setPointerCapture(e.pointerId); });
+	c.addEventListener('pointermove', e=>{ if(!p) return;
+		cam.az -= (e.clientX - p.x) * 0.008; cam.el += (e.clientY - p.y) * 0.006;
+		p = {x:e.clientX, y:e.clientY}; place(); });
+	const stop = ()=>{ p = null; };
+	c.addEventListener('pointerup', stop); c.addEventListener('pointercancel', stop); c.addEventListener('pointerleave', stop);
+	c.addEventListener('wheel', e=>{ e.preventDefault(); cam.anim=null;
+		cam.r = Math.max(26, Math.min(180, cam.r * (1 + Math.sign(e.deltaY)*0.09))); place(); }, {passive:false});
+	c.addEventListener('touchmove', e=>{ if(e.touches.length!==2) return; e.preventDefault();
+		const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+		if(pinch) { cam.r = Math.max(26, Math.min(180, cam.r * pinch/d)); place(); }
+		pinch = d; }, {passive:false});
+	c.addEventListener('touchend', ()=>{ pinch = 0; });
+}
+
+/* ============================================================
+   THE LEAK — blue drips where the part would not go
+   ============================================================ */
+const drips = [];
+function leak(e){
+	let x = 0, y = BEAMTOP, z = 8;
+	if(e && e.clientX && renderer){
+		const r = renderer.domElement.getBoundingClientRect();
+		const nx = ((e.clientX - r.left)/r.width)*2 - 1, ny = -((e.clientY - r.top)/r.height)*2 + 1;
+		const rc = new THREE.Raycaster(); rc.setFromCamera({x:nx, y:ny}, camera);
+		const hit = new THREE.Vector3();
+		if(rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,0,1), 0), hit)){
+			x = Math.max(-26, Math.min(26, hit.x)); y = Math.max(2, Math.min(RIDGE, hit.y));
+		}
+	}
+	for(let i=0;i<6;i++){
+		const m = new THREE.Mesh(new THREE.SphereGeometry(.42, 8, 6), new THREE.MeshBasicMaterial({color:0x6f92b8, transparent:true, opacity:.95}));
+		m.position.set(x + (Math.random()-.5)*3, y + i*.5, z + (Math.random()-.5)*3);
+		root.add(m); drips.push({m, t:performance.now() + i*90, v:0});
+	}
+	dirty = true;
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+function scene3d(){
+	const c = document.createElement('canvas');
+	c.style.cssText = 'width:100%;height:100%;display:block;border-radius:14px;cursor:grab';
+	holder.appendChild(c);
+	renderer = new THREE.WebGLRenderer({canvas:c, antialias:true});
+	renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+	scene = new THREE.Scene();
+	scene.background = new THREE.Color(0x0b1119);
+	scene.fog = new THREE.Fog(0x0b1119, 120, 260);
+	camera = new THREE.PerspectiveCamera(38, 1, 0.5, 500);
+	root = new THREE.Group(); scene.add(root);
+	scene.add(new THREE.HemisphereLight(0xbfd4ee, 0x30281e, 0.85));
+	const sun = new THREE.DirectionalLight(0xfff0d0, 0.85); sun.position.set(48, 66, 34); scene.add(sun);
+	const fill = new THREE.DirectionalLight(0x88a8cc, 0.30); fill.position.set(-40, 24, -30); scene.add(fill);
+	clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
+	textures(); buildAll(); clipAll(); orbitInit(); place(); resize3d();
+	loop();
+}
+function resize3d(){
+	if(!renderer) return;
+	const w = holder.clientWidth, h = holder.clientHeight;
+	if(w < 2 || h < 2) return;
+	renderer.setSize(w, h, false);
+	camera.aspect = w/h; camera.updateProjectionMatrix(); dirty = true;
+}
+function loop(){
+	raf = requestAnimationFrame(loop);
+	const now = performance.now();
+	if(cam.anim){
+		const a = cam.anim, k = Math.min(1, (now - a.t0)/a.ms), e = k<.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
+		cam.az = a.az0 + (a.az - a.az0)*e; cam.el = a.el0 + (a.el - a.el0)*e; cam.r = a.r0 + (a.r - a.r0)*e;
+		cam.tx = a.tx0 + (a.tx - a.tx0)*e; cam.ty = a.ty0 + (a.ty - a.ty0)*e; cam.tz = a.tz0 + (a.tz - a.tz0)*e;
+		if(k>=1) cam.anim = null; place();
+	}
+	for(let i=drips.length-1; i>=0; i--){
+		const d = drips[i]; if(now < d.t) continue;
+		d.v += 0.055; d.m.position.y -= d.v; d.m.material.opacity -= 0.02;
+		if(d.m.position.y < 0 || d.m.material.opacity <= 0){ root.remove(d.m); d.m.geometry.dispose(); d.m.material.dispose(); drips.splice(i,1); }
+		dirty = true;
+	}
+	if(dirty){ renderer.render(scene, camera); dirty = false; }
+}
+
+/* the ring's layout() already sizes #housebox; follow it */
+const _layout = layout;
+layout = function(){ _layout(); resize3d(); };
+window.removeEventListener('resize', _layout);
+window.addEventListener('resize', layout);
+
+buildRing();
+if(window.THREE){ scene3d(); redraw(); }
+else { holder.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center;color:#9a9789;font-size:13px;line-height:1.5">The 3D house needs WebGL, and this browser will not start it.<br><br><a style="color:#d4a24c" href="../pipe/index.html">Open PLUMBING · Rough to Trim instead →</a></div>'; }
+score();
+</script>
