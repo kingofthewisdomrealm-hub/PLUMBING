@@ -45,11 +45,52 @@ is burned out of the house by the gate that catches it.
 - **Street** — what a homeowner sees. A tee on its back looks exactly like this too.
 - **Inspector** — only what the open gate checks is lit.
 
+---
+
+# The Fixer — six calls, five years later
+
+**Live:** https://kingofthewisdomrealm-hub.github.io/PLUMBING/ → `apps/fix/`
+
+Same house. Now it is lived in and the phone rings. **47 cards, 6 calls, 6 shortcuts.**
+
+Every call runs the same five beats — **Call → Look → Find → Fix → Prove** — with a **Tell**
+card where there is a number the homeowner needs before they have to ask for it.
+
+| | What they said | What it actually is |
+|---|---|---|
+| 1 | “It won’t stop” | The flapper — and the in-tank bleach tablet that ate it and the seat |
+| 2 | “It won’t drain” | Grease in the branch eight feet out, not the trap |
+| 3 | “No hot water” | The lower element, open, in a tank full of sediment |
+| 4 | “It’s dripping” | The relief valve doing its job on a closed system with no expansion tank |
+| 5 | “It stinks” | A dry trap *and* a closet flange sitting under the tile |
+| 6 | “It’s backing up” | Roots at a joint, forty feet out |
+
+Each call has a shortcut that works on the day and comes back as a **callback**. Take all
+six and the model bills the same **$2,845** and makes you eat **$2,675** — you worked
+twice and got paid once. That number is the whole point of the level.
+
+**The scoreboard is money, not gates:** Calls closed · Callbacks · **Ate** · Invoice.
+Money you spent fixing the wrong thing moves off the invoice and into *Ate*, because you
+do not get to bill a customer for your own diagnosis.
+
+**Rates** — the button in the bottom bar opens every number in the deck, most expensive
+first, with its source under it and the six big-ticket lines flagged. They are Treasure
+Coast market ranges gathered September 2026, **not** Covenant's prices; swap your own
+sub's numbers into `RATES` and every card moves with them. The sheet also carries
+Indian River County's own water and sewer tiers, which is why a running toilet costs
+about $670 a year here and not the $90 a homeowner expects — a leak does not get billed
+at the bottom tier, it pushes the whole month into the top one.
+
+Four of the six faults are mistakes the build model explicitly warns about: the flange
+set under the tile (`ft`), the missing expansion tank (`ex`), the dry trap (`fl`), and
+the cleanout at the property line that makes call 6 a four-second diagnosis (`tp`).
+
 ## The files
 
 ```
 index.html            the hub
-apps/pipe/index.html  the model — one self-contained file, three.js r134 from cdnjs
+apps/pipe/index.html  the build model — one self-contained file, three.js r134 from cdnjs
+apps/fix/index.html   the fixer — the same house and the same engine, six service calls
 ```
 
 Everything is data. `PARTS` is the card catalog, `ND` is the drain tree node by node,
