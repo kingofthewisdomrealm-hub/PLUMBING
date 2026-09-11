@@ -53,6 +53,11 @@ is burned out of the house by the gate that catches it.
 
 Same house. Now it is lived in and the phone rings. **47 cards, 6 calls, 6 shortcuts.**
 
+**Six calls, six decks.** The model opens on the board, not in a room. You pick the call
+you are standing in front of and the deck holds only that call's cards; you can work them
+in any order, leave one half-done and come back to it, and the money runs across the whole
+day. Close a call and the board comes back with it marked.
+
 Every call runs the same five beats — **Call → Look → Find → Fix → Prove** — with a **Tell**
 card where there is a number the homeowner needs before they have to ask for it.
 
