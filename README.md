@@ -37,13 +37,22 @@ is burned out of the house by the gate that catches it.
 - **Six vents that stop in the attic and get capped.** It is raining, the roofer is a
   week out, and nobody sees a capped pipe in an attic full of trusses. Fails `311`.
 
-### The three views
+### The four views
 
-- **X-ray** (default) — the slab, the block and the drywall go to glass so you can see
-  the pipe inside them. This is the one change from HOUSE: HOUSE cuts the model in half
-  with a clipping plane, which would hide half the plumbing.
+- **X-ray** (default) — the slab, the block and the drywall go to glass, and the **frame
+  is hidden outright**. A thousand ghosted trusses and studs stack into a haze you cannot
+  see through, so anything built into a `denseGroup()` only exists in Street. This is the
+  one change from HOUSE: HOUSE cuts the model in half with a clipping plane, which would
+  hide half the plumbing.
+- **Pipes only** — the building and the ground go away completely. What is left is the
+  system: every pipe, every fitting, every fixture, hanging in the air the way it does on
+  a riser diagram. Trench dirt is tagged `soilMat()` so it goes too.
 - **Street** — what a homeowner sees. A tee on its back looks exactly like this too.
 - **Inspector** — only what the open gate checks is lit.
+
+**Zoom** — drag the bar in the bottom-left corner, or use the − and + buttons. The wheel
+and a two-finger pinch still work; all of them write to the same `cam.r` and the bar
+follows.
 
 ---
 
@@ -77,6 +86,8 @@ twice and got paid once. That number is the whole point of the level.
 **The scoreboard is money, not gates:** Calls closed · Callbacks · **Ate** · Invoice.
 Money you spent fixing the wrong thing moves off the invoice and into *Ate*, because you
 do not get to bill a customer for your own diagnosis.
+
+The Fixer has the same four views (**Room** and **The fault** in place of Street and Inspector) and the same zoom bar.
 
 **Rates** — the button in the bottom bar opens every number in the deck, most expensive
 first, with its source under it and the six big-ticket lines flagged. They are Treasure
