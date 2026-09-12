@@ -148,6 +148,16 @@ button.ghost[disabled]{opacity:.32;cursor:not-allowed}
 .appname small{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.17em;text-transform:uppercase;color:var(--faint);margin-top:4px}
 .foot b{color:var(--brand);font-weight:600}
 
+/* ---------- the zoom dragger ---------- */
+.zoomer{display:flex;align-items:center;gap:7px;background:rgba(12,14,20,.82);border:1px solid var(--line);border-radius:999px;padding:4px 8px;width:max-content}
+.zoomer .zb{padding:0;width:20px;height:20px;line-height:1;border-radius:999px;font-size:13px;display:flex;align-items:center;justify-content:center}
+#zoom{-webkit-appearance:none;appearance:none;width:132px;height:16px;background:transparent;cursor:ew-resize;margin:0}
+#zoom::-webkit-slider-runnable-track{height:3px;border-radius:99px;background:#2a2f3d}
+#zoom::-moz-range-track{height:3px;border-radius:99px;background:#2a2f3d}
+#zoom::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--gold);border:0;margin-top:-6px;cursor:grab}
+#zoom::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--gold);border:0;cursor:grab}
+#zoom:active::-webkit-slider-thumb{cursor:grabbing}
+@media (max-width:760px){#zoom{width:96px}}
 /* ---------- the deck ---------- */
 #deck{position:absolute;z-index:5;width:246px;display:flex;flex-direction:column;align-items:center;gap:9px;
 	background:rgba(10,12,18,.72);border:1px solid var(--line);border-radius:16px;padding:14px 13px 13px}
@@ -215,12 +225,14 @@ button.ghost[disabled]{opacity:.32;cursor:not-allowed}
 		<div class="appname">PLUMBING <em>Rough to Trim</em><small>Treasure Coast CBS home · the three visits</small></div>
 		<div class="toggle" role="tablist" aria-label="View">
 			<button data-view="xray" class="on">X-ray</button>
+			<button data-view="pipes">Pipes only</button>
 			<button data-view="street">Street</button>
 			<button data-view="inspector">Inspector</button>
 		</div>
 	</div>
 	<div class="corner" id="tr"><div id="stamps"></div></div>
 	<div class="corner" id="bl">
+		<div class="zoomer"><button class="ghost zb" id="zout" aria-label="Zoom out">&#8722;</button><input id="zoom" type="range" min="18" max="150" step="1" value="60" aria-label="Zoom"><button class="ghost zb" id="zin" aria-label="Zoom in">+</button></div>
 		<span class="score" id="score">Gates 0/7 · Leaks 0 · Failed gates 0</span>
 		<div style="display:flex;gap:6px;flex-wrap:wrap;max-width:60vw"><button class="ghost" id="undo" disabled title="Take the last step back (Ctrl+Z)">&#8630; Reverse</button><button class="ghost" id="dall"></button><button class="ghost" id="reset">Start over</button><button class="ghost" id="showchart">The table</button></div>
 	</div>
@@ -1057,6 +1069,9 @@ function mat(o){
 	return m;
 }
 function siteMat(o){ const m = mat(o); m.userData.site = true; return m; }
+/* dirt, trenches, the hole you are standing in — real in X-ray, gone in Pipes only */
+function soilMat(o){ const m = mat(o); m.userData.ground = true; return m; }
+function soilSiteMat(o){ const m = mat(o); m.userData.ground = true; m.userData.site = true; return m; }
 function clipAll(){ /* the plumbing model x-rays the shell instead of cutting it */ }
 
 function box(w,h,d,x,y,z,m,g,rx){ const n=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), m); n.position.set(x,y,z); if(rx) n.rotation.x=rx; g.add(n); return n; }
@@ -1084,6 +1099,11 @@ function hub(p, r, m, g){ const n=new THREE.Mesh(new THREE.SphereGeometry(r,12,9
 function run(pts, r, m, g){ for(let i=1;i<pts.length;i++){ pipe(pts[i-1], pts[i], r, m, g); hub(pts[i-1], r*1.06, m, g); } hub(pts[pts.length-1], r*1.06, m, g); }
 const TCY = z => (RIDGE - .30) - Math.abs(z)/3;      // the top chord line
 function build(name, fn){ const g=new THREE.Group(); g.visible=false; root.add(g); LG[name]=g; CUR=name; fn(g); CUR=null; }
+/* ⭐ The frame — trusses, webs, studs, furring — is a thousand little sticks. Ghosted at
+   14% each they stack into a solid haze and you cannot see the pipe behind them. Anything
+   built into a dense group is hidden outright in every view except Room. */
+const DENSEG = [];
+function denseGroup(parent){ const d = new THREE.Group(); DENSEG.push(d); parent.add(d); return d; }
 
 /* ---------- canvas textures (no external files) ---------- */
 function makeTex(draw, size){
@@ -1267,7 +1287,7 @@ function buildAll(){
 
 	build('tapin', g=>{
 		const pvc = siteMat({color:'#cfc7b5'}), cap = siteMat({color:'#c46a4a'});
-		const dirt = siteMat({color:'#171009', transparent:true, opacity:.5});
+		const dirt = soilSiteMat({color:'#171009', transparent:true, opacity:.5});
 		box(5, 3.6, 26, ND.co[0], -1.9, 25, dirt, g);                       // the lateral trench
 		cylX(.9, 110, 0, -4.4, ND.tap[2], siteMat({color:'#8d8b86'}), g);   // the main under the street
 		run([ND.tap, ND.co, ND.out], R4, pvc, g);                           // the lateral, falling to the tap
@@ -1278,7 +1298,7 @@ function buildAll(){
 	/* ---- step 2 ---- */
 	build('bdrain', g=>{
 		const pvc = mat({color:'#cfc7b5'});
-		const dirt = mat({color:'#171009', transparent:true, opacity:.45});
+		const dirt = soilMat({color:'#171009', transparent:true, opacity:.45});
 		box(W2*2-2, 1.9, 3.2, -4, -1.0, -6.4, dirt, g);                     // the trenches
 		box(3.2, 2.0, D2*2-4, ND.j1[0], -1.1, 4, dirt, g);
 		run([ND.bl, ND.tub, ND.wc1, ND.lv1, ND.j1], R3, pvc, g);            // back branch, both ways to the main
@@ -1345,7 +1365,7 @@ function buildAll(){
 
 	build('wservice', g=>{
 		const cold = siteMat({color:'#6f92b8'});
-		const dirt = siteMat({color:'#171009', transparent:true, opacity:.5});
+		const dirt = soilSiteMat({color:'#171009', transparent:true, opacity:.5});
 		const bx = siteMat({color:'#9aa0a6'}), tape = siteMat({color:'#4f86c6'}), wire = siteMat({color:'#c9a83a'});
 		box(3.4, 2.4, METER[1] - 12, METER[0], -1.2, (METER[1]+12)/2, dirt, g);
 		box(2.6, 1.3, 3.4, METER[0], .55, METER[1], bx, g);                  // the meter box at the line
@@ -1361,11 +1381,12 @@ function buildAll(){
 	/* ---- step 5 ---- */
 	build('shell2', g=>{
 		const wood = mat({color:'#c9a26b'}), web = mat({color:'#b08a55'});
+		const fr = denseGroup(g);                                   // the sticks — gone in X-ray
 		for(let x=-W2; x<=W2; x+=4){
-			box(.3,.5,D2*2+1, x, BC-.25, 0, wood, g);
-			[1,-1].forEach(s=>{ strut(x, s*EAVEZ, TCY(EAVEZ), 0, TCY(0), .34, wood, g);
-				strut(x, s*9.3, BC, s*4.7, TCY(4.7), .26, web, g); });
-			strut(x, 0, BC, 0, TCY(0)-.2, .28, web, g);
+			box(.3,.5,D2*2+1, x, BC-.25, 0, wood, fr);
+			[1,-1].forEach(s=>{ strut(x, s*EAVEZ, TCY(EAVEZ), 0, TCY(0), .34, wood, fr);
+				strut(x, s*9.3, BC, s*4.7, TCY(4.7), .26, web, fr); });
+			strut(x, 0, BC, 0, TCY(0)-.2, .28, web, fr);
 		}
 		roof(.30, .38, roofTex(TX.ply, 8, 4), g);
 		roof(.12, .60, roofTex(TX.stucco, 20, 20, {color:'#46525f'}), g);
@@ -1379,6 +1400,7 @@ function buildAll(){
 
 	build('shell3', g=>{
 		const plate = mat({color:'#6d7d3a'}), stud = mat({color:'#c9a26b'});
+		g = denseGroup(g);                                          // the whole partition frame
 		PARTS_W.forEach(w=>{
 			const len = w.b - w.a, c = (w.a+w.b)/2;
 			const th = (w.d==='x' && w.at===-5) ? .62 : .42;                 // the wet wall is built deeper on purpose
@@ -1623,6 +1645,9 @@ const OVERRIDE = {
    see the pipe inside it. HOUSE cut the model in half with a clipping plane;
    that hides half the plumbing, so this model ghosts instead of cuts. */
 const SHELLY = new Set(['shell','shell2','shell3','closed','pad']);
+/* Pipes only: the building and the ground go away completely. What is left is the
+   system — every pipe, every fitting, every fixture, and nothing to look through. */
+const HOUSEY = new Set(['shell','shell2','shell3','closed','pad','site','permit','layout']);
 
 function redraw(){
 	if(!renderer) return;
@@ -1641,23 +1666,27 @@ function applyView(){
 	}
 	for(const name in MATS){
 		const on = v !== 'inspector' || lit.has(name) || /^gate/.test(name) || name==='site';
+		const gone  = (v === 'pipes') && HOUSEY.has(name);
 		const ghost = (v === 'xray') && SHELLY.has(name);
 		MATS[name].forEach(m=>{
+			m.visible = !gone && !(v === 'pipes' && m.userData.ground);
 			m.transparent = m.userData.tr || !on || ghost;
-			m.opacity = !on ? 0.07 : ghost ? 0.14 : m.userData.op;
+			m.opacity = !on ? 0.07 : ghost ? 0.11 : m.userData.op;
 			m.depthWrite = !(ghost || !on);
 			if(m.emissive) m.emissive.setHex(v==='inspector' && lit.has(name) ? 0x554013 : 0x000000);
 			m.needsUpdate = true;
 		});
 	}
+	DENSEG.forEach(d=>d.visible = (v === 'room'));   // the frame only exists in Room
 	dirty = true;
 }
 document.querySelectorAll('.toggle button').forEach(b=>b.addEventListener('click', ()=>{
 	document.querySelectorAll('.toggle button').forEach(x=>x.classList.toggle('on', x===b));
 	state.view = b.dataset.view; applyView();
-	const p = {xray:[0.34,0.26,60,0,6.4,0], street:[0.95,0.18,68,0,6,0], inspector:[cam.az,cam.el,cam.r,cam.tx,cam.ty,cam.tz]}[state.view];
+	const p = {xray:[0.34,0.26,60,0,6.4,0], pipes:[0.34,0.30,54,0,4,0], street:[0.95,0.18,68,0,6,0], inspector:[cam.az,cam.el,cam.r,cam.tx,cam.ty,cam.tz]}[state.view];
 	flyTo(p[0], p[1], p[2], p[3], p[4], p[5]);
-	say('', state.view==='street' ? '<b>From the street.</b> Walk around it. A tee on its back and six vents capped in the attic look exactly like this too.'
+	say('', state.view==='pipes' ? '<b>Pipes only.</b> No slab, no block, no frame, no ground. Just the system — every fall, every vent, every fitting, hanging in the air the way it does on a riser diagram.'
+		: state.view==='street' ? '<b>From the street.</b> Walk around it. A tee on its back and six vents capped in the attic look exactly like this too.'
 		: state.view==='inspector' ? '<b>Inspector view.</b> Only what the open gate checks is lit. If he cannot see it, he cannot pass it.'
 		: '<b>X-ray.</b> The slab, the block and the drywall go to glass so you can see the pipe inside them. Spin it and follow the water.');
 }));
@@ -1671,6 +1700,7 @@ function place(){
 	                    cam.ty + cam.r*Math.sin(ce),
 	                    cam.tz + cam.r*Math.cos(cam.az)*Math.cos(ce));
 	camera.lookAt(cam.tx, cam.ty, cam.tz);
+	if(zoomBar && document.activeElement !== zoomBar) zoomBar.value = Math.round(cam.r);
 	dirty = true;
 }
 function flyTo(az, el, r, tx, ty, tz){
@@ -1701,6 +1731,13 @@ function applyShot(id){
 	if(SHOT[id]){ inShot = id; flyTo.apply(null, SHOT[id]); return; }
 	if(inShot){ inShot = null; flyTo.apply(null, HOME); }
 }
+/* ⭐ Drag the bar to pull the house in and push it away. The wheel and a pinch still
+   work; all three write to the same cam.r, and place() drags the bar back into step. */
+const zoomBar = document.getElementById('zoom');
+function setZoom(v){ cam.anim = null; cam.r = Math.max(18, Math.min(150, v)); place(); }
+zoomBar.addEventListener('input', ()=>setZoom(+zoomBar.value));
+document.getElementById('zin').addEventListener('click', ()=>setZoom(cam.r * 0.82));
+document.getElementById('zout').addEventListener('click', ()=>setZoom(cam.r * 1.22));
 function orbitInit(){
 	const c = renderer.domElement; let p = null, pinch = 0;
 	c.style.touchAction = 'none';
@@ -1711,10 +1748,10 @@ function orbitInit(){
 	const stop = ()=>{ p = null; };
 	c.addEventListener('pointerup', stop); c.addEventListener('pointercancel', stop); c.addEventListener('pointerleave', stop);
 	c.addEventListener('wheel', e=>{ e.preventDefault(); cam.anim=null;
-		cam.r = Math.max(26, Math.min(180, cam.r * (1 + Math.sign(e.deltaY)*0.09))); place(); }, {passive:false});
+		cam.r = Math.max(18, Math.min(150, cam.r * (1 + Math.sign(e.deltaY)*0.09))); place(); }, {passive:false});
 	c.addEventListener('touchmove', e=>{ if(e.touches.length!==2) return; e.preventDefault();
 		const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
-		if(pinch) { cam.r = Math.max(26, Math.min(180, cam.r * pinch/d)); place(); }
+		if(pinch) { cam.r = Math.max(18, Math.min(150, cam.r * pinch/d)); place(); }
 		pinch = d; }, {passive:false});
 	c.addEventListener('touchend', ()=>{ pinch = 0; });
 }
